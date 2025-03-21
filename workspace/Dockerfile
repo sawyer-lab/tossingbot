@@ -50,7 +50,6 @@ RUN apt update && apt install --no-install-recommends -y \
 ARG USER=kid
 ARG UID=1000
 ARG GID=1000
-
 RUN groupadd -g $GID -o $USER
 RUN useradd -m -u $UID -g $GID -o -s /bin/bash $USER
 
@@ -66,4 +65,20 @@ RUN /ros_entrypoint.sh catkin_make
 RUN ln -s /cinves_perception ~/ros_ws/src/.
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh catkin_create_pkg test_keny rospy roscpp
 RUN /ros_entrypoint.sh catkin_make
+RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
+RUN cd ~/ros_ws/src; git clone https://github.com/RethinkRobotics/sawyer_robot.git -b release-5.2.0
+RUN cd ~/ros_ws/src; git clone https://github.com/RethinkRobotics/sawyer_simulator.git -b release-5.2.0
+RUN cd ~/ros_ws/src; git clone https://github.com/RethinkRobotics-opensource/sns_ik.git -b melodic-devel
+RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool merge sawyer_simulator/sawyer_simulator.rosinstall
+RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
+RUN /ros_entrypoint.sh catkin_make
+RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
+ARG HOST_HOSTNAME=`hostname`
+ARG HOST_IP=172.17.0.1
+ARG ROBOT_HOSTNAME=021607CP00070.local
+RUN sed -i 's/ros_version=".*"/ros_version="melodic"/g' ~/ros_ws/intera.sh
+RUN sed -i "s/your_ip=\".*\"/your_ip=\"${HOST_IP}\"/g" ~/ros_ws/intera.sh
+RUN sed -i "s/my_computer/${HOST_HOSTNAME}/g" ~/ros_ws/intera.sh
+RUN sed -i "s/robot_hostname.local/${ROBOT_HOSTNAME}/g" ~/ros_ws/intera.sh
+RUN /ros_entrypoint.sh rosdep update
 
