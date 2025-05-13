@@ -38,14 +38,31 @@ RUN apt update && apt install --no-install-recommends -y \
 
 # From https://support.rethinkrobotics.com/support/solutions/articles/80000980381-gazebo-tutorial
 RUN apt update && apt install --no-install-recommends -y \
-    gazebo9 ros-melodic-qt-build ros-melodic-gazebo-ros-control \
-    ros-melodic-gazebo-ros-pkgs ros-melodic-ros-control ros-melodic-control-toolbox ros-melodic-realtime-tools \
-    ros-melodic-ros-controllers ros-melodic-xacro python-wstool ros-melodic-tf-conversions ros-melodic-kdl-parser  \
+    gazebo9 \
+    python-wstool \
+    ros-${ROS_DISTRO}-control-toolbox \
+    ros-${ROS_DISTRO}-gazebo-ros-control \
+    ros-${ROS_DISTRO}-gazebo-ros-pkgs \
+    ros-${ROS_DISTRO}-kdl-parser \
+    ros-${ROS_DISTRO}-qt-build \
+    ros-${ROS_DISTRO}-realtime-tools \
+    ros-${ROS_DISTRO}-ros-control \
+    ros-${ROS_DISTRO}-ros-controllers \
+    ros-${ROS_DISTRO}-tf-conversions \
+    ros-${ROS_DISTRO}-xacro \
     && rm -rf /var/lib/apt/lists/*
 
 ## state-publisher was not listed
 # ros-${ROS_DISTRO}-joystick-drivers \
 # ros-${ROS_DISTRO}-robot-state-publisher \
+
+# From https://wiki.ros.org/docker/Tutorials/Hardware%20Acceleration
+# for AMD
+# but it didn't work in this image
+#RUN \
+#  apt-get update && \
+#  apt-get -y install libgl1-mesa-glx libgl1-mesa-dri && \
+#  rm -rf /var/lib/apt/lists/*
 
 ARG USER=kid
 ARG UID=1000
@@ -63,7 +80,8 @@ RUN mkdir -p /home/$USER/ros_ws/src
 WORKDIR /home/$USER/ros_ws
 RUN /ros_entrypoint.sh catkin_make
 RUN ln -s /cinves_perception ~/ros_ws/src/.
-RUN cd ~/ros_ws/src; /ros_entrypoint.sh catkin_create_pkg test_keny rospy roscpp
+RUN ln -s /test_keny ~/ros_ws/src/.
+RUN cd ~/ros_ws/src; /ros_entrypoint.sh catkin_create_pkg test_keny2 rospy roscpp
 RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
 RUN cd ~/ros_ws/src; git clone https://github.com/RethinkRobotics/sawyer_robot.git -b release-5.2.0

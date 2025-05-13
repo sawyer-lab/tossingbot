@@ -1,13 +1,15 @@
 xhost +
 docker run -d --rm \
 	--network host \
-	-e DISPLAY=$DISPLAY \
+	-e DISPLAY \
+	-e TERM \
 	-v /tmp/.X11-unix/:/tmp/.X11-unix/ \
 	--mount type=bind,source=./ros_src/cinves_perception,target=/cinves_perception \
+	--mount type=bind,source=./ros_src/test_keny,target=/test_keny \
 	--name robo2025 \
 	-it \
-	--privileged \
 	robo2025-workspace:latest "$@"
 
-
-# --device=/dev/bus/usb/003/002 \
+# --privileged \
+# AMD hardware acceleration did not work
+# --device=/dev/dri \ --group-add video \
