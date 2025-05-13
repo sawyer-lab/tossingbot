@@ -50,6 +50,7 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-ros-controllers \
     ros-${ROS_DISTRO}-tf-conversions \
     ros-${ROS_DISTRO}-xacro \
+    pcl-tools \
     && rm -rf /var/lib/apt/lists/*
 
 ## state-publisher was not listed
