@@ -36,6 +36,10 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-desktop-full \
     && rm -rf /var/lib/apt/lists/*
 
+RUN echo 'export __NV_PRIME_RENDER_OFFLOAD=1' >> /etc/bash.bashrc && \
+    echo 'export __GLX_VENDOR_LIBRARY_NAME=nvidia' >> /etc/bash.bashrc && \
+    echo 'export __VK_LAYER_NV_optimus=NVIDIA_only' >> /etc/bash.bashrc
+
 # From https://support.rethinkrobotics.com/support/solutions/articles/80000980381-gazebo-tutorial
 RUN apt update && apt install --no-install-recommends -y \
     gazebo9 ros-melodic-qt-build ros-melodic-gazebo-ros-control \
