@@ -1,0 +1,3 @@
+[submodule "ros_src/ros_tutorials_practice"]
+	path = ros_src/ros_tutorials_practice
+	url = git@github.com:krontzo/ros_tutorials_practice.git
