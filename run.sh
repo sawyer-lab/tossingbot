@@ -7,6 +7,7 @@ docker run -d --rm \
 	--mount type=bind,source=./ros_src/cinves_perception,target=/cinves_perception \
 	--mount type=bind,source=./ros_src/test_keny,target=/test_keny \
 	--mount type=bind,source=./ros_src/ros_tutorials_practice,target=/ros_tutorials_practice \
+	--mount type=bind,source=./ros_bags,target=/databags \
 	--name robo2025 \
 	-it \
 	robo2025-workspace:latest "$@"

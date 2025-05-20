@@ -101,4 +101,5 @@ RUN sed -i "s/your_ip=\".*\"/your_ip=\"${HOST_IP}\"/g" ~/ros_ws/intera.sh
 RUN sed -i "s/my_computer/${HOST_HOSTNAME}/g" ~/ros_ws/intera.sh
 RUN sed -i "s/robot_hostname.local/${ROBOT_HOSTNAME}/g" ~/ros_ws/intera.sh
 RUN /ros_entrypoint.sh rosdep update
+RUN ln -s /databags ~/databags
 
