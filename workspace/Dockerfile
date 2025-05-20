@@ -82,6 +82,7 @@ WORKDIR /home/$USER/ros_ws
 RUN /ros_entrypoint.sh catkin_make
 RUN ln -s /cinves_perception ~/ros_ws/src/.
 RUN ln -s /test_keny ~/ros_ws/src/.
+RUN ln -s /ros_tutorials_practice ~/ros_ws/src/.
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh catkin_create_pkg test_keny2 rospy roscpp
 RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
