@@ -1,0 +1,3 @@
+[submodule "ros_src/perception_pkg"]
+	path = ros_src/perception_pkg
+	url = file:///home/fausto/Code/tossingbot/ros_src/perception_pkg
