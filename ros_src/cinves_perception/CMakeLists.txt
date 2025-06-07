@@ -23,6 +23,7 @@ include_directories(
 
 catkin_install_python(PROGRAMS
   scripts/keny2.py
+  scripts/head_wobbler.py
   scripts/move_head.py
   scripts/camera_display.py
   scripts/fk.py
