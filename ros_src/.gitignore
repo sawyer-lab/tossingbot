@@ -1,0 +1,7 @@
+# Ignore everything in this directory
+*
+
+# Except for the perception_pkg directory
+!perception_pkg/
+!.gitignore
+/turtle_pkg/
