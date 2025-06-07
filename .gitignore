@@ -172,8 +172,3 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-
-# ROS specific
-ros_src/*
-!ros_src/perception_pkg/
-!ros_src/.gitignore
