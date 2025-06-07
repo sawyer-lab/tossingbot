@@ -14,6 +14,9 @@ docker run -d --rm \
     -e __VK_LAYER_NV_optimus=NVIDIA_only \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     --mount type=bind,source=./ros_src/cinves_perception,target=/cinves_perception \
+    --mount type=bind,source=./ros_src/turtle_pkg,target=/turtle_pkg \
+    --mount type=bind,source=./ros_src/perception_pkg,target=/perception_pkg \
+    --mount type=bind,source=./ros_src/bagfiles,target=/bagfiles \
     --name robo2025 \
     -it \
     --privileged \

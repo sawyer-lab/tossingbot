@@ -32,6 +32,7 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-mocap-optitrack \
     && rm -rf /var/lib/apt/lists/*
 
+
 RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-desktop-full \
     && rm -rf /var/lib/apt/lists/*
@@ -67,6 +68,9 @@ RUN mkdir -p /home/$USER/ros_ws/src
 WORKDIR /home/$USER/ros_ws
 RUN /ros_entrypoint.sh catkin_make
 RUN ln -s /cinves_perception ~/ros_ws/src/.
+RUN ln -s /turtle_pkg ~/ros_ws/src/.
+RUN ln -s /perception_pkg ~/ros_ws/src/.
+RUN ln -s /bagfiles ~/ros_ws/src/.
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh catkin_create_pkg test_keny rospy roscpp
 RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
@@ -85,4 +89,5 @@ RUN sed -i "s/your_ip=\".*\"/your_ip=\"${HOST_IP}\"/g" ~/ros_ws/intera.sh
 RUN sed -i "s/my_computer/${HOST_HOSTNAME}/g" ~/ros_ws/intera.sh
 RUN sed -i "s/robot_hostname.local/${ROBOT_HOSTNAME}/g" ~/ros_ws/intera.sh
 RUN /ros_entrypoint.sh rosdep update
+
 
