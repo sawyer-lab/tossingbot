@@ -24,6 +24,7 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-control-msgs \
     ros-${ROS_DISTRO}-xacro \
     ros-${ROS_DISTRO}-tf2-ros \
+    ros-${ROS_DISTRO}-tf2-sensor-msgs \
     ros-${ROS_DISTRO}-rviz \
     ros-${ROS_DISTRO}-cv-bridge \
     ros-${ROS_DISTRO}-actionlib \
@@ -38,6 +39,7 @@ RUN apt update && apt install --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir casadi==3.5.5
+RUN pip install scipy
 
 
 RUN apt update && apt install --no-install-recommends -y \
@@ -80,11 +82,9 @@ RUN mkdir -p /home/$USER/ros_ws/src
 WORKDIR /home/$USER/ros_ws
 RUN /ros_entrypoint.sh catkin_make
 
-RUN ln -s /simulation ~/ros_ws/src/.
-RUN ln -s /perception_pkg ~/ros_ws/src/.
-RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
 
-RUN cd ~/ros_ws/src; /ros_entrypoint.sh catkin_create_pkg test_keny2 rospy roscpp
+
+
 RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_robot.git -b release-5.2.0
@@ -102,7 +102,23 @@ RUN sed -i "s/your_ip=\".*\"/your_ip=\"${HOST_IP}\"/g" ~/ros_ws/intera.sh
 RUN sed -i "s/my_computer/${HOST_HOSTNAME}/g" ~/ros_ws/intera.sh
 RUN sed -i "s/robot_hostname.local/${ROBOT_HOSTNAME}/g" ~/ros_ws/intera.sh
 RUN /ros_entrypoint.sh rosdep update
-RUN ln -s /databags ~/databags
-RUN /ros_entrypoint.sh catkin_make
 
+
+RUN ln -s /simulation ~/ros_ws/src/.
+RUN ln -s /perception_pkg ~/ros_ws/src/.
+RUN ln -s /custom_sawyer_description ~/ros_ws/src/.
+RUN ln -s /custom_sawyer_gazebo ~/ros_ws/src/.
+RUN ln -s /environments ~/ros_ws/src/.
+RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
+
+
+# RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
+
+# Pull the latest changes from all the cloned repositories
+# RUN cd ~/ros_ws/src/sawyer_robot && git pull
+# RUN cd ~/ros_ws/src/sawyer_simulator && git pull
+# RUN cd ~/ros_ws/src/sns_ik && git pull
+
+
+RUN /ros_entrypoint.sh catkin_make
 

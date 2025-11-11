@@ -6,6 +6,7 @@ docker run -d --rm \
     --runtime=nvidia \
     --gpus all \
     --network host \
+    --device=/dev/bus/usb/001/002 \
     --privileged \
     -e DISPLAY=$DISPLAY \
     -e TERM \
@@ -15,9 +16,11 @@ docker run -d --rm \
     -e __GLX_VENDOR_LIBRARY_NAME=nvidia \
     -e __VK_LAYER_NV_optimus=NVIDIA_only \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
-    --mount type=bind,source=./ros_src/perception_pkg,target=/perception_pkg \
     --mount type=bind,source=./ros_src/simulation,target=/simulation \
-    --mount type=bind,source=./ros_src/planning,target=/planning \
+    --mount type=bind,source=./ros_src/perception_pkg,target=/perception_pkg \
+    --mount type=bind,source=./ros_src/custom_sawyer_description,target=/custom_sawyer_description \
+    --mount type=bind,source=./ros_src/custom_sawyer_gazebo,target=/custom_sawyer_gazebo \
+    --mount type=bind,source=./ros_src/environments,target=/environments \
     --mount type=bind,source=./ros_src/pneumatic_gripper_description,target=/pneumatic_gripper_description \
     --name robo2025 \
     -it \
