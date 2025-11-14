@@ -105,11 +105,12 @@ RUN /ros_entrypoint.sh rosdep update
 
 
 RUN ln -s /simulation ~/ros_ws/src/.
-RUN ln -s /perception_pkg ~/ros_ws/src/.
+# RUN ln -s /perception_pkg ~/ros_ws/src/.
 RUN ln -s /custom_sawyer_description ~/ros_ws/src/.
 RUN ln -s /custom_sawyer_gazebo ~/ros_ws/src/.
 RUN ln -s /environments ~/ros_ws/src/.
 RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
+RUN ln -s /depth_perception ~/ros_ws/src/.
 
 
 # RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.

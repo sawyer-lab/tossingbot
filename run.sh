@@ -22,6 +22,7 @@ docker run -d --rm \
     --mount type=bind,source=./ros_src/custom_sawyer_gazebo,target=/custom_sawyer_gazebo \
     --mount type=bind,source=./ros_src/environments,target=/environments \
     --mount type=bind,source=./ros_src/pneumatic_gripper_description,target=/pneumatic_gripper_description \
+    --mount type=bind,source=./ros_src/depth_perception,target=/depth_perception \
     --name robo2025 \
     -it \
     robo2025-workspace:latest "$@"

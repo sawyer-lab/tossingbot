@@ -1,0 +1,51 @@
+<?xml version="1.0" ?>
+<robot name="sawyer" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:include filename="$(find custom_sawyer_description)/urdf/camera_2D.xacro"/>
+    <xacro:include filename="$(find custom_sawyer_description)/urdf/camera_2D_gazebo.xacro"/>
+
+        <xacro:include filename="$(find custom_sawyer_description)/urdf/kinetic_rgb.urdf.xacro"/>
+
+     <xacro:property name="deg_to_rad" value="0.01745329251994329577"/>
+    <xacro:property name="M_SCALE" value="0.001 0.001 0.001"/> 
+    <xacro:property name="M_PI" value="3.14159"/>
+
+  <xacro:arg name="gazebo" default="false"/>
+  <xacro:arg name="pedestal" default="false"/>
+  <xacro:arg name="static" default="true"/>
+  <xacro:arg name="electric_gripper" default="false"/>
+
+  <xacro:include filename="$(find sawyer_description)/urdf/sawyer_base.urdf.xacro">
+    <xacro:arg name="gazebo" value="${gazebo}"/>
+    <xacro:arg name="pedestal" value="${pedestal}"/>
+  </xacro:include>
+
+  <xacro:if value="$(arg gazebo)">
+    <xacro:include filename="$(find sawyer_description)/urdf/sawyer_base.gazebo.xacro">
+      <xacro:arg name="static" value="${static}"/>
+      <xacro:arg name="pedestal" value="${pedestal}"/>
+    </xacro:include>
+  </xacro:if>
+
+  <!-- <xacro:if value="$(arg electric_gripper)">
+    <xacro:include filename="$(find sawyer_description)/urdf/sawyer_electric_gripper.urdf.xacro">
+      <xacro:arg name="gazebo" value="${gazebo}"/>
+    </xacro:include>
+  </xacro:if> -->
+
+
+    <xacro:if value="$(arg electric_gripper)">
+  <xacro:include filename="$(find pneumatic_gripper_description)/urdf/pneumatic_gripper.urdf.xacro">
+    <xacro:arg name="gazebo" value="${gazebo}"/>
+  </xacro:include>
+  </xacro:if>
+
+
+    <xacro:kinetic_rgb name="rgbd_camera" parent="base">
+        <origin xyz="0.1 0.0 1.3" rpy="${0.0 * deg_to_rad} ${70.0 * deg_to_rad} ${0.0 * deg_to_rad}"/>
+        <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
+    </xacro:kinetic_rgb>
+
+  
+
+</robot>
