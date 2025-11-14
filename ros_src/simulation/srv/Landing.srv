@@ -1,0 +1,4 @@
+bool is_finish_call # True to finish and calculate, False to start and store
+
+---
+int32 index # The calculated landing index, or -1 if the operation failed/not yet complete

@@ -1,0 +1,11 @@
+# Goal
+geometry_msgs/Point target_position
+int32 orientation_index  # Encodes the orientation (0-15)
+
+---
+# Result
+bool success
+
+---
+# Feedback
+string current_step

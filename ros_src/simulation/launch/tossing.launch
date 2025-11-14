@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- We resume the logic in empty_world.launch, changing the name of the world to be launched -->
+  <!-- <include file="$(find sawyer_gazebo)/launch/sawyer_world.launch">
+    <arg name="electric_gripper" value="true"/>
+  </include> -->
+
+  <!-- Start the Sawyer pick and place demo -->
+  <node  pkg="simulation" type="PickingActionServer.py"  name="picking_action_server"/>
+  <node  pkg="simulation" type="TossingActionServer.py"  name="tossing_action_server"/>
+  <node  pkg="simulation" type="LandingServiceServer.py"  name="landing_service_server"/>  
+
+  <node pkg="simulation" type="ik_pick_and_place_demo.py" name="ik_pick_and_place_demo" />
+  <!-- <node pkg="simulation" type="spawn_objects.py" name="spawn_objects"/> -->
+  <!-- <node pkg="simulation" type="ik_pick_and_place_demo.py" name="ik_pick_and_place_demo"/> -->
+
+</launch>

@@ -1,6 +1,0 @@
-[submodule "ros_src/ros_tutorials_practice"]
-	path = ros_src/ros_tutorials_practice
-	url = git@github.com:krontzo/ros_tutorials_practice.git
-[submodule "ros_src/perception_pkg"]
-	path = ros_src/perception_pkg
-	url = file:///home/fausto/Code/tossingbot/ros_src/perception_pkg
