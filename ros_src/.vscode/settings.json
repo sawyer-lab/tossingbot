@@ -7,6 +7,9 @@
     "files.autoSaveDelay": 1000,
     "workbench.colorTheme": "Default Dark Modern",
     "editor.fontLigatures": true,
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.autopep8"
+    },
     "python.autoComplete.extraPaths": [
         "/home/kid/ros_ws/devel/lib/python2.7/dist-packages",
         "/opt/ros/melodic/lib/python2.7/dist-packages"

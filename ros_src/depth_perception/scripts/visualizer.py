@@ -10,7 +10,14 @@ from depth_perception.msg import XYZRGBArray
 class XYZRGBVisualizer(object):
     def __init__(self):
         rospy.init_node("xyzrgb_visualizer")
-        self.resolution = rospy.get_param("~resolution", 0.007)  
+        
+        self.visualize = rospy.get_param("~visualize", True)
+        
+        # Grid dimensions in pixels
+        self.W = rospy.get_param("~width", 400)
+        self.H = rospy.get_param("~height", 400)
+        
+        # Spatial bounds in meters
         self.xmin = rospy.get_param("~xmin", -1.0)
         self.xmax = rospy.get_param("~xmax",  1.0)
         self.ymin = rospy.get_param("~ymin", -1.0)
@@ -18,17 +25,21 @@ class XYZRGBVisualizer(object):
 
         self.bridge = CvBridge()
 
-        # Publishers (matching generator.py)
+        # Publishers
         self.pub_heightmap = rospy.Publisher("heightmap_image", Image, queue_size=1)
         self.pub_color = rospy.Publisher("heightmap_color", Image, queue_size=1)
+        
+        # Create resizable windows if visualizing
+        if self.visualize:
+            cv2.namedWindow("Heightmap", cv2.WINDOW_NORMAL)
+            cv2.namedWindow("Color Heightmap", cv2.WINDOW_NORMAL)
+            cv2.namedWindow("Side-by-side", cv2.WINDOW_NORMAL)
+            cv2.namedWindow("Overlay RGB + Height", cv2.WINDOW_NORMAL)
 
-        # Compute grid dimensions
-        self.W = int((self.xmax - self.xmin) / self.resolution)
-        self.H = int((self.ymax - self.ymin) / self.resolution)
 
         rospy.Subscriber("xyzrgb_cloud", XYZRGBArray, self.cb, queue_size=1)
-        rospy.loginfo("XYZRGBVisualizer started: resolution=%.4f, grid=%dx%d", 
-                      self.resolution, self.W, self.H)
+        rospy.loginfo("XYZRGBVisualizer started: grid=%dx%d, bounds=[%.2f,%.2f]x[%.2f,%.2f]", 
+                      self.W, self.H, self.xmin, self.xmax, self.ymin, self.ymax)
 
     def cb(self, msg):
         if len(msg.x) == 0:
@@ -53,8 +64,8 @@ class XYZRGBVisualizer(object):
 
         # Insert points (max Z per cell)
         for x, y, z, r, g, b in pts:
-            ix = int((x - self.xmin) / self.resolution)
-            iy = int((y - self.ymin) / self.resolution)
+            ix = int(x - self.xmin) 
+            iy = int(y - self.ymin) 
             
             if ix < 0 or iy < 0 or ix >= self.W or iy >= self.H:
                 continue
@@ -66,11 +77,12 @@ class XYZRGBVisualizer(object):
         # Replace -inf with nan
         heightmap[heightmap == -np.inf] = np.nan
 
-        # Publish as ROS Image messages
-        self.publish_heightmap(heightmap, colormap)
+        # # Publish as ROS Image messages
+        # self.publish_heightmap(heightmap, colormap)
 
         # Visualize with OpenCV
-        self.visualize(heightmap, colormap)
+        if self.visualize:
+            self.display(heightmap, colormap)
 
     def publish_heightmap(self, heightmap, colormap):
         hm = heightmap.copy()
@@ -93,7 +105,7 @@ class XYZRGBVisualizer(object):
         color_msg.header.stamp = rospy.Time.now()
         self.pub_color.publish(color_msg)
 
-    def visualize(self, heightmap, colormap):
+    def display(self, heightmap, colormap):
         hm = heightmap.copy()
         hm[np.isnan(hm)] = 0
 
@@ -103,12 +115,6 @@ class XYZRGBVisualizer(object):
                       (np.nanmax(heightmap) - np.nanmin(heightmap))).astype(np.uint8)
         else:
             hm_norm = np.zeros_like(hm, dtype=np.uint8)
-
-        # Create resizable windows
-        cv2.namedWindow("Heightmap", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Color Heightmap", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Side-by-side", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Overlay RGB + Height", cv2.WINDOW_NORMAL)
 
         # A) Two separate windows
         cv2.imshow("Heightmap", hm_norm)
