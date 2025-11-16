@@ -5,8 +5,19 @@ RUN apt update && apt install -y --no-install-recommends \
     git \
     tmux \
     vim-nox \
-    gdb \ 
+    gdb \
+    wget \
+    unzip \
+    fontconfig \
     && rm -rf /var/lib/apt/lists/*
+
+# Install JetBrains Mono fonts
+RUN wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip -O /tmp/JetBrainsMono.zip \
+    && unzip -q /tmp/JetBrainsMono.zip -d /tmp/JetBrainsMono \
+    && mkdir -p /usr/share/fonts/truetype/jetbrains-mono \
+    && cp /tmp/JetBrainsMono/fonts/ttf/*.ttf /usr/share/fonts/truetype/jetbrains-mono/ \
+    && fc-cache -fv \
+    && rm -rf /tmp/JetBrainsMono.zip /tmp/JetBrainsMono
 
 # https://support.rethinkrobotics.com/support/solutions/articles/80000980134-workstation-setup
 # From https://sdk.rethinkrobotics.com/intera/Workstation_Setup
@@ -111,6 +122,7 @@ RUN ln -s /custom_sawyer_gazebo ~/ros_ws/src/.
 RUN ln -s /environments ~/ros_ws/src/.
 RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
 RUN ln -s /depth_perception ~/ros_ws/src/.
+RUN ln -s /.vscode ~/ros_ws/src/.
 
 
 # RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.

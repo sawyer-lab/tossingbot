@@ -17,12 +17,12 @@ docker run -d --rm \
     -e __VK_LAYER_NV_optimus=NVIDIA_only \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     --mount type=bind,source=./ros_src/simulation,target=/simulation \
-    --mount type=bind,source=./ros_src/perception_pkg,target=/perception_pkg \
     --mount type=bind,source=./ros_src/custom_sawyer_description,target=/custom_sawyer_description \
     --mount type=bind,source=./ros_src/custom_sawyer_gazebo,target=/custom_sawyer_gazebo \
     --mount type=bind,source=./ros_src/environments,target=/environments \
     --mount type=bind,source=./ros_src/pneumatic_gripper_description,target=/pneumatic_gripper_description \
     --mount type=bind,source=./ros_src/depth_perception,target=/depth_perception \
+    --mount type=bind,source=./ros_src/.vscode,target=/.vscode \
     --name robo2025 \
     -it \
     robo2025-workspace:latest "$@"
