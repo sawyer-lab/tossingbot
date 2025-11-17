@@ -23,6 +23,9 @@ docker run -d --rm \
     --mount type=bind,source=./ros_src/pneumatic_gripper_description,target=/pneumatic_gripper_description \
     --mount type=bind,source=./ros_src/depth_perception,target=/depth_perception \
     --mount type=bind,source=./ros_src/.vscode,target=/.vscode \
+    --mount type=bind,source=./ros_src/plain_perception,target=/plain_perception \
+    --mount type=bind,source=./ros_src/tossing,target=/tossing \
+    --mount type=bind,source=./ros_src/grasping,target=/grasping \
     --name robo2025 \
     -it \
     robo2025-workspace:latest "$@"

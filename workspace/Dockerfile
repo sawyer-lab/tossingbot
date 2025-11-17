@@ -123,6 +123,10 @@ RUN ln -s /environments ~/ros_ws/src/.
 RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
 RUN ln -s /depth_perception ~/ros_ws/src/.
 RUN ln -s /.vscode ~/ros_ws/src/.
+RUN ln -s /plain_perception ~/ros_ws/src/.
+RUN ln -s /tossing ~/ros_ws/src/.
+RUN ln -s /grasping ~/ros_ws/src/.
+
 
 
 # RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
