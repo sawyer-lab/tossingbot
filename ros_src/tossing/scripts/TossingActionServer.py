@@ -3,7 +3,7 @@
 import rospy
 import actionlib
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist
-from simulation.msg import TossAction, TossFeedback, TossResult
+from tossing.msg import TossAction, TossFeedback, TossResult
 from intera_interface import Limb, Gripper
 import numpy as np
 from motion_planner import solve_trajectory_problem, scale_solution

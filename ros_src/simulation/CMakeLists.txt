@@ -21,10 +21,7 @@ add_service_files(
   Landing.srv
 )
 
-add_action_files(
-  DIRECTORY action
-  FILES Toss.action
-)
+
 generate_messages(
   DEPENDENCIES
     actionlib_msgs
