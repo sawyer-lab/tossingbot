@@ -3,14 +3,14 @@
 import rospy
 import actionlib
 from geometry_msgs.msg import Point, Pose, Quaternion
-from simulation.msg import PickAction, PickFeedback, PickResult
+from grasping.msg import GraspAction, GraspFeedback, GraspResult
 from intera_interface import Limb, Gripper
 from servo import servo_to_pose
 
-class PickingActionServer:
+class GraspingActionServer:
     
     def __init__(self):
-        self.server = actionlib.SimpleActionServer('picking_action', PickAction, self.execute, False)
+        self.server = actionlib.SimpleActionServer('grasping_action', GraspAction, self.execute, False)
         self.server.start()
         self.hover_distance = 0.15
         self.tip_name = "right_gripper_tip"
@@ -33,12 +33,12 @@ class PickingActionServer:
             Quaternion(x=0.8072863778156645, y=0.5898592139998273, z=0.01857585806107479, w=-0.003122394924607331),
             Quaternion(x=0.6767046199248393, y=0.7360136152144672, z=0.018828185872277962, w=0.0005612557954010435)
         ]
-        rospy.loginfo("Picking Action Server is ready.")
+        rospy.loginfo("Grasping Action Server is ready.")
 
 
     def execute(self, goal):
-        feedback = PickFeedback()
-        result = PickResult()
+        feedback = GraspFeedback()
+        result = GraspResult()
         
         try:
             self.limb = Limb("right")
@@ -69,17 +69,17 @@ class PickingActionServer:
             return
 
 
-        # Step 2: Pick
+        # Step 2: Grasp
         self.gripper.open()
-        feedback.current_step = "Picking"
+        feedback.current_step = "Grasping"
         self.server.publish_feedback(feedback)
-        pick_pose = Pose(
+        grasp_pose = Pose(
             position=goal.target_position,
             orientation=self.orientations[goal.orientation_index]
         )
-        servo_to_pose(self.limb, self.tip_name, self.rate, pick_pose)
+        servo_to_pose(self.limb, self.tip_name, self.rate, grasp_pose)
         current_pose = self.limb.endpoint_pose()
-        error = abs(current_pose["position"].z - pick_pose.position.z)
+        error = abs(current_pose["position"].z - grasp_pose.position.z)
         print("Positioning error: {:.4f} m".format(error))
         self.gripper.close()
         rospy.sleep(1.0)
@@ -111,6 +111,6 @@ class PickingActionServer:
 
 
 if __name__ == "__main__":
-    rospy.init_node('picking_action_server')
-    server = PickingActionServer()
+    rospy.init_node('Grasping_action_server')
+    server = GraspingActionServer()
     rospy.spin()

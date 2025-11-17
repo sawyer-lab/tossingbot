@@ -9,7 +9,7 @@ import intera_interface
 import numpy as np
 
 import random
-from picking.PickingActionClient import PickingActionClient
+from GraspingActionClient import GraspingActionClient
 from tossing.TossingActionClient import TossingActionClient
 from landing.LandingServiceClient import LandingClient
 
@@ -40,7 +40,7 @@ def main():
             'right_j6': 0.0}
 
 
-    # picking_client = PickingActionClient()
+    # grasping_client = GraspingActionClient()
     tossing_client = TossingActionClient()
     # landing_client = LandingClient()
 
@@ -49,7 +49,7 @@ def main():
     limb.move_to_joint_positions(home)
     rospy.sleep(1.0)
     
-    # picked = picking_client.pick(block_position, 3)
+    # picked = grasping_client.pick(block_position, 3)
 
     
     # rospy.sleep(1.0)
@@ -75,7 +75,7 @@ def main():
     limb.move_to_joint_positions(home)
     # rospy.sleep(1.0)
     # block_position=Point(x=0.590, y=-0.12, z=-0.140)
-    # picked = picking_client.pick(block_position, 3)
+    # picked = grasping_client.pick(block_position, 3)
     # angles = [ 0.0, -1.01986851, 0.0, 2.5424116, 0.0, 0.57185201, 1.76599022]
     # limb.move_to_joint_positions(dict(zip(limb.joint_names(), angles)))
     
@@ -122,7 +122,7 @@ def main():
     #     block_position=Point(x=0.45, y=0.155, z=-0.135)
     #     # idx = random.randint(0, 15)
 
-    #     picked = picking_client.pick(block_position, 3)
+    #     picked = grasping_client.pick(block_position, 3)
         
     #     rospy.sleep(1.0)
         
@@ -135,9 +135,9 @@ def main():
         # rospy.sleep(1.0)
   
         
-        # rospy.loginfo("Picking {}".format("succeeded." if picked else "failed."))
+        # rospy.loginfo("Grasping {}".format("succeeded." if picked else "failed."))
         # if not picked:
-        #     rospy.logwarn("Picking failed, retrying...")
+        #     rospy.logwarn("Grasping failed, retrying...")
         #     continue
         
         # rospy.sleep(1.0)

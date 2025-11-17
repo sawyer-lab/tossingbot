@@ -23,7 +23,7 @@ add_service_files(
 
 add_action_files(
   DIRECTORY action
-  FILES Pick.action Toss.action
+  FILES Toss.action
 )
 generate_messages(
   DEPENDENCIES
