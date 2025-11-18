@@ -15,11 +15,6 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
 )
 
-add_service_files(
-  DIRECTORY srv
-  FILES
-  Landing.srv
-)
 
 
 generate_messages(
@@ -36,7 +31,7 @@ catkin_package(
     moveit_ros_planning_interface
     tf2_geometry_msgs
     geometry_msgs
-    message_runtime
+
 )
 
 include_directories(
@@ -46,7 +41,7 @@ include_directories(
 
 
 install(PROGRAMS
-   scripts/ik_pick_and_place_demo.py
+   scripts/simulation.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

@@ -11,7 +11,7 @@ import numpy as np
 import random
 from GraspingActionClient import GraspingActionClient
 from TossingActionClient import TossingActionClient
-from landing.LandingServiceClient import LandingClient
+from LandingDetectionActionClient import LandingDetectionClient
 
 
 
