@@ -176,3 +176,14 @@ cython_debug/
 # Ignore all subfolders inside ros_src
 /ros_bags/*/
 /.idea
+
+
+# Ignore images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.webp  
