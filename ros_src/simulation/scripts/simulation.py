@@ -38,7 +38,7 @@ def main():
     limb.move_to_joint_positions(home)
     rospy.sleep(1.0)
 
-    desired_speed = 0.1
+    desired_speed = 1.5
     
     while not rospy.is_shutdown():
 

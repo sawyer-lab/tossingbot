@@ -48,7 +48,7 @@ class TossingPlanner:
         initial_sol = self.scale_casadi_solution_taskspace_peak(max_sol, target_speed, dt=self.dt)
         refined_solution = self.refine_trajectory_for_exact_speed(initial_sol, target_speed)
 
-        
+        index = refined_solution["Q"].shape[1]
 
         total_sol = self.append_stop_trajectory(
             refined_solution["Q"], refined_solution["Qd"], refined_solution["Qdd"]
@@ -61,8 +61,8 @@ class TossingPlanner:
         # plot_ee_kinematics(total_sol)
 
         # animate_3r_trajectory(total_sol, self.dt)
-
-
+        total_sol["index"] = index
+        
         return total_sol
         
 

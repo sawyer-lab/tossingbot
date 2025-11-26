@@ -58,10 +58,11 @@ class TossingActionServer:
 
         # 3. Execution
         # ------------
+        index = sol["index"]
         feedback.current_step = "Executing"
         self.server.publish_feedback(feedback)
         
-        success = self.execute_trajectory(full_traj)
+        success = self.execute_trajectory(full_traj, index)
         
         result.success = success
         if success:
@@ -69,14 +70,15 @@ class TossingActionServer:
         else:
             self.server.set_aborted(result)
 
-    def execute_trajectory(self, trajectory):
+    def execute_trajectory(self, trajectory, index):
         q_full, qd_full, qdd_full = trajectory
         joint_names = self.limb.joint_names()
         rate = rospy.Rate(100)
         n = q_full.shape[0]
 
         self.send_control("start_vel")
-        
+
+         
         try:
             for i in range(n):
                 if self.server.is_preempt_requested():
@@ -87,7 +89,10 @@ class TossingActionServer:
                 self.limb.set_joint_trajectory(joint_names, q_full[i], qd_full[i], qdd_full[i])
                 
                 # Check for release condition (last point)
-                if i == n - 1:
+                if i == index - 1:
+                    vel = self.limb.endpoint_velocity()['linear']
+                    speed = np.linalg.norm([vel.x, vel.y, vel.z])
+                    print("Releasing at speed: {:.3f} m/s".format(speed))
                     self.gripper.open()
                     
                 rate.sleep()
