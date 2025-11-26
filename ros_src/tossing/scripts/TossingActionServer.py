@@ -41,7 +41,7 @@ class TossingActionServer:
         # 2. Plan Trajectory
         # try:
             # We want specific velocity at end effector
-        speed = 1.9 # m/s
+        speed = goal.speed
             
         start_time = time.time()
         sol = self.planner.get_trajectory(speed)

@@ -21,7 +21,7 @@ class PerceptionHandler(object):
         self.points_data = None 
 
         # Neural Network ROI Configuration (in Base frame meters)
-        self.roi_x_min = 0.3   
+        self.roi_x_min = 0.0   
         self.roi_x_max = 0.8   
         self.roi_y_min = -0.35 
         self.roi_y_max = 0.35  

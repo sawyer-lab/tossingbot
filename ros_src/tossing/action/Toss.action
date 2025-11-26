@@ -1,6 +1,5 @@
 # Goal
-geometry_msgs/Point target_position
-geometry_msgs/Twist target_velocity
+float32 speed
 
 ---
 # Result

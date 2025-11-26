@@ -1,6 +1,5 @@
 import rospy
 import actionlib
-from geometry_msgs.msg import Point
 from tossing.msg import TossAction, TossGoal
 
 class TossingActionClient:
@@ -17,11 +16,10 @@ class TossingActionClient:
             rospy.logerr("Check that the server is running with: rosnode list | grep toss")
             raise Exception("Tossing action server not found")
 
-    def toss(self, target_position, target_velocity):
+    def toss(self, target_speed):
         goal = TossGoal()
-        goal.target_position = target_position
-        goal.target_velocity = target_velocity
-        rospy.loginfo("Sending toss goal: position={}, target_velocity={}".format(target_position, target_velocity))
+        goal.speed = target_speed
+        rospy.loginfo("Sending toss goal: speed={}".format(target_speed))
         self.client.send_goal(goal, feedback_cb=self.feedback_callback)
         self.client.wait_for_result()
         result = self.client.get_result()

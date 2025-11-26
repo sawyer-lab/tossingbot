@@ -56,9 +56,9 @@ class TossingPlanner:
 
         # self.cache.save(target_speed, total_sol)
 
-        plot_joint_trajectories(total_sol)
+        # plot_joint_trajectories(total_sol)
 
-        plot_ee_kinematics(total_sol)
+        # plot_ee_kinematics(total_sol)
 
         # animate_3r_trajectory(total_sol, self.dt)
 
