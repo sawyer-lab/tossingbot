@@ -11,6 +11,61 @@ RUN apt update && apt install -y --no-install-recommends \
     fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
+    
+
+
+# 1. Install Python 3.8 from PPA
+RUN apt-get update && apt-get install -y software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y \
+    python3.8 \
+    python3.8-dev \
+    python3.8-distutils \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Pip for Python 3.8 (Legacy URL)
+RUN curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py && python3.8 get-pip.py && rm get-pip.py
+
+# 3. Install Modern PyTorch (CUDA 12.1) - CRITICAL UPDATE
+RUN python3.8 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# 4. Install Build Dependencies for ROS
+RUN python3.8 -m pip install rospkg catkin_pkg numpy pyyaml empy==3.3.4
+
+# -----------------------------------------------------------------------
+# 5. Build cv_bridge for Python 3.8
+# -----------------------------------------------------------------------
+RUN mkdir -p /cv_bridge_ws/src && \
+    cd /cv_bridge_ws/src && \
+    git clone https://github.com/ros-perception/vision_opencv.git && \
+    cd vision_opencv && \
+    git checkout melodic && \
+    cd /cv_bridge_ws && \
+    /bin/bash -c "source /opt/ros/melodic/setup.bash && \
+    catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3.8 \
+                -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 \
+                -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.8.so"
+
+# -----------------------------------------------------------------------
+# 6. Build geometry2 (tf2_ros) for Python 3.8
+# -----------------------------------------------------------------------
+RUN mkdir -p /geometry2_ws/src && \
+    cd /geometry2_ws/src && \
+    git clone https://github.com/ros/geometry2.git && \
+    cd geometry2 && \
+    git checkout melodic-devel && \
+    touch tf2_kdl/CATKIN_IGNORE && \
+    touch tf2_bullet/CATKIN_IGNORE && \
+    touch test_tf2/CATKIN_IGNORE && \
+    cd /geometry2_ws && \
+    /bin/bash -c "source /opt/ros/melodic/setup.bash && \
+    catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3.8 \
+                -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 \
+                -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.8.so"
+
+                
 # Install JetBrains Mono fonts
 RUN wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip -O /tmp/JetBrainsMono.zip \
     && unzip -q /tmp/JetBrainsMono.zip -d /tmp/JetBrainsMono \
