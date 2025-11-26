@@ -32,6 +32,7 @@ RUN apt update && apt install --no-install-recommends -y \
     python-wstool \
     python-numpy \
     python-opencv \
+    python-tk \
     ros-${ROS_DISTRO}-control-msgs \
     ros-${ROS_DISTRO}-xacro \
     ros-${ROS_DISTRO}-tf2-ros \
@@ -126,8 +127,6 @@ RUN ln -s /.vscode ~/ros_ws/src/.
 RUN ln -s /plain_perception ~/ros_ws/src/.
 RUN ln -s /tossing ~/ros_ws/src/.
 RUN ln -s /grasping ~/ros_ws/src/.
-
-
 
 # RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
 

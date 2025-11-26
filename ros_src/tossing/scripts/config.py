@@ -6,7 +6,8 @@ ROBOT_PARAMS = {
     "l3": 0.13375,
     "gripper_len": 0.1944,
     "base_offset": np.array([0.081, 0.0, 0.317]),
-    "global_gripper_width": 0.01
+    "global_gripper_width": 0.01,
+    "gripper_width": 0.02,
 }
 
 TRAJECTORY_CONFIG = {

@@ -4,6 +4,7 @@ from scipy.interpolate import interp1d
 from kinematics import RobotKinematics 
 from config import TRAJECTORY_CONFIG
 from cache_utils import SimpleTrajectoryCache
+from plotting import *
 
 class TossingPlanner:
     def __init__(self, profile="express", max_speed = 2.0, angle_deg=45,
@@ -54,6 +55,12 @@ class TossingPlanner:
         )
 
         # self.cache.save(target_speed, total_sol)
+
+        plot_joint_trajectories(total_sol)
+
+        plot_ee_kinematics(total_sol)
+
+        # animate_3r_trajectory(total_sol, self.dt)
 
 
         return total_sol
@@ -357,7 +364,8 @@ class TossingPlanner:
         return {
             "Q": q_concat,
             "Qd": qd_concat,
-            "Qdd": qdd_concat
+            "Qdd": qdd_concat,
+            "time": np.arange(0, q_concat.shape[1]*self.dt, self.dt)
         }
 
 
