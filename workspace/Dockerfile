@@ -32,8 +32,20 @@ RUN curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py && python3.8
 RUN python3.8 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # 4. Install Build Dependencies for ROS
-RUN python3.8 -m pip install rospkg catkin_pkg numpy pyyaml empy==3.3.4
+RUN python3.8 -m pip install \
+    rospkg \
+    catkin_pkg \
+    numpy \
+    pyyaml \
+    empy==3.3.4 \
+    open3d \
+    stable-baselines3 \
+    gymnasium \
+    tensorboard \
+    shimmy
 
+# Install ros_numpy directly from GitHub (since it's not on PyPI)
+RUN python3.8 -m pip install git+https://github.com/eric-wieser/ros_numpy.git
 # -----------------------------------------------------------------------
 # 5. Build cv_bridge for Python 3.8
 # -----------------------------------------------------------------------
@@ -161,7 +173,7 @@ RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b melod
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool merge sawyer_simulator/sawyer_simulator.rosinstall
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
 RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
-ARG HOST_HOSTNAME=`hostname`
+ARG HOST_HOSTNAME=hostname
 ARG HOST_IP=172.17.0.1
 ARG ROBOT_HOSTNAME=021607CP00070.local
 RUN sed -i 's/ros_version=".*"/ros_version="melodic"/g' ~/ros_ws/intera.sh
@@ -192,4 +204,3 @@ RUN ln -s /grasping ~/ros_ws/src/.
 
 
 RUN /ros_entrypoint.sh catkin_make
-

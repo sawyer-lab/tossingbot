@@ -2,207 +2,233 @@
 import sys
 import os
 
-# ==============================================================================
-# CRITICAL: LOAD CUSTOM COMPILED LIBRARIES
-# ==============================================================================
-# These point to the workspaces we built manually in the Dockerfile
+# --- PATHS ---
 sys.path.insert(0, '/geometry2_ws/devel/lib/python3/dist-packages')
 sys.path.insert(0, '/cv_bridge_ws/devel/lib/python3/dist-packages')
-
-import rospy
-import tf2_ros
-from sensor_msgs.msg import PointCloud2
-import numpy as np
-import threading
+import open3d as o3d
 import torch
 import torch.nn as nn
+import rospy
+import tf2_ros
+import numpy as np
+import ros_numpy
 
-# --- Helper: Pure NumPy Quaternion to Rotation Matrix ---
-# We use this to avoid importing tf2_sensor_msgs or PyKDL
-def get_transformation_matrix(trans):
-    tx = trans.transform.translation.x
-    ty = trans.transform.translation.y
-    tz = trans.transform.translation.z
-    t_vec = np.array([tx, ty, tz], dtype=np.float32)
 
-    qx = trans.transform.rotation.x
-    qy = trans.transform.rotation.y
-    qz = trans.transform.rotation.z
-    qw = trans.transform.rotation.w
+from sensor_msgs.msg import PointCloud2, Image
+from std_msgs.msg import Header
 
-    # Construct Rotation Matrix from Quaternion
-    r00 = 1 - 2 * (qy**2 + qz**2)
-    r01 = 2 * (qx*qy - qz*qw)
-    r02 = 2 * (qx*qz + qy*qw)
-    
-    r10 = 2 * (qx*qy + qz*qw)
-    r11 = 1 - 2 * (qx**2 + qz**2)
-    r12 = 2 * (qy*qz - qx*qw)
-    
-    r20 = 2 * (qx*qz - qy*qw)
-    r21 = 2 * (qy*qz + qx*qw)
-    r22 = 1 - 2 * (qx**2 + qy**2)
+# ==============================================================================
+# CONFIGURATION
+# ==============================================================================
+# Set this to True to pause execution and open a window at every step
+DEBUG_STEP_BY_STEP = False 
 
-    R_mat = np.array([
-        [r00, r01, r02],
-        [r10, r11, r12],
-        [r20, r21, r22]
-    ], dtype=np.float32)
-    
-    return t_vec, R_mat
+# Set this to True to publish intermediate steps to Rviz (Real-time)
+PUBLISH_DEBUG_TOPICS = True
+# ==============================================================================
 
-class PerceptionAINode(object):
+class PerceptionDebugger:
     def __init__(self):
-        rospy.init_node("perception_ai_node")
-        rospy.loginfo("Initializing Python 3.8 AI Node...")
-
-        # --- GPU SETUP ---
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        rospy.loginfo(f"--- DEVICE: {self.device} ---")
+        rospy.init_node("perception_debugger")
         
+        # GPU Setup
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        # GPU Setup
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # --- ADD THIS BLOCK ---
+        rospy.loginfo(f"Selected Device: {self.device}")
         if self.device.type == 'cuda':
-            rospy.loginfo(f"GPU Model: {torch.cuda.get_device_name(0)}")
+            rospy.loginfo(f"GPU Name: {torch.cuda.get_device_name(0)}")
+            rospy.loginfo(f"CUDA Version: {torch.version.cuda}")
         else:
-            rospy.logwarn("Running on CPU! Check Docker GPU runtime settings.")
+            rospy.logwarn("Running on CPU! CUDA is not available.")
+        # ----------------------
 
-        # --- MODEL LOAD ---
-        # Replace this with: self.model = torch.load('path/to/weights.pt')
-        self.model = self.load_dummy_model()
-        self.model.to(self.device)
-        self.model.eval()
+        self.model = nn.Conv2d(6, 1, kernel_size=3, padding=1).to(self.device)
 
-        # --- ROS SETUP ---
+        # self.device = torch.device('cpu')  # For debugging, we use CPU
+        self.model = nn.Conv2d(6, 1, kernel_size=3, padding=1).to(self.device) # Dummy model
+
+        # TF Buffer
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
-        self.lock = threading.Lock()
-        self.points_data = None 
 
-        # --- CONFIG ---
-        self.roi_x_min, self.roi_x_max = 0.0, 0.8   
-        self.roi_y_min, self.roi_y_max = -0.35, 0.35  
-        self.resolution = 0.007 
+        # Pipeline Config
+        self.voxel_size = 0.005 
+        self.roi_bounds = np.array([0.0, -0.40, -0.1, 0.9, 0.40, 0.5]) 
+        self.grid_res = 0.007 
+        self.img_width = int((self.roi_bounds[3] - self.roi_bounds[0]) / self.grid_res)
+        self.img_height = int((self.roi_bounds[4] - self.roi_bounds[1]) / self.grid_res)
 
-        self.img_width = int((self.roi_x_max - self.roi_x_min) / self.resolution)
-        self.img_height = int((self.roi_y_max - self.roi_y_min) / self.resolution)
+        # --- DEBUG PUBLISHERS ---
+        if PUBLISH_DEBUG_TOPICS:
+            self.pub_step1 = rospy.Publisher("/debug/1_raw_transformed", PointCloud2, queue_size=1)
+            self.pub_step2 = rospy.Publisher("/debug/2_cropped", PointCloud2, queue_size=1)
+            self.pub_step3 = rospy.Publisher("/debug/3_voxelized", PointCloud2, queue_size=1)
+            self.pub_tensor = rospy.Publisher("/debug/4_tensor_rgb", Image, queue_size=1)
+
+        rospy.Subscriber("/rgbd_camera/depth/points", PointCloud2, self.cb, queue_size=1)
+        rospy.loginfo("Debug Node Started. Waiting for point clouds...")
+
+    def visualize_step(self, geometry, title="Debug"):
+        """
+        Pauses code and opens an Open3D window.
+        """
+        if DEBUG_STEP_BY_STEP:
+            print(f"[DEBUG] Visualizing: {title} (Close window to continue)")
+            # Add a coordinate frame for reference
+            axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
+            o3d.visualization.draw_geometries([geometry, axis], window_name=title)
+
+    def publish_o3d(self, pcd, publisher, frame_id):
+        """
+        Helper: Converts Open3D -> ROS PointCloud2 for Rviz
+        """
+        if not PUBLISH_DEBUG_TOPICS: return
         
-        rospy.loginfo(f"Tensor Shape: (6, {self.img_height}, {self.img_width})")
+        points = np.asarray(pcd.points)
+        if len(points) == 0: return
+        
+        colors = np.asarray(pcd.colors) # Float 0..1
+        
+        # Create structured array for ros_numpy
+        # We pack RGB float back into the specific ROS structure
+        data = np.zeros(len(points), dtype=[
+            ('x', np.float32), ('y', np.float32), ('z', np.float32),
+            ('r', np.uint8), ('g', np.uint8), ('b', np.uint8)
+        ])
+        data['x'] = points[:, 0]
+        data['y'] = points[:, 1]
+        data['z'] = points[:, 2]
+        data['r'] = (colors[:, 0] * 255).astype(np.uint8)
+        data['g'] = (colors[:, 1] * 255).astype(np.uint8)
+        data['b'] = (colors[:, 2] * 255).astype(np.uint8)
 
-        rospy.Subscriber("voxel_filtered_points", PointCloud2, self.cb, queue_size=1)
-
-    def load_dummy_model(self):
-        # A simple conv layer just to prove GPU inference works
-        return nn.Conv2d(in_channels=6, out_channels=1, kernel_size=3, padding=1)
+        # Use ros_numpy to create the message
+        # Note: We manually create the 'rgb' float field usually, but splitting r,g,b works in Rviz too
+        msg = ros_numpy.msgify(PointCloud2, data)
+        msg.header.frame_id = frame_id
+        msg.header.stamp = rospy.Time.now()
+        publisher.publish(msg)
 
     def cb(self, msg):
-        # 1. Get Transform
+        # -----------------------------------------------------------
+        # STEP 0: Parse Input
+        # -----------------------------------------------------------
+        try:
+            pc_np = ros_numpy.numpify(msg)
+        except Exception: 
+            return
+
+        # === FIX: FLATTEN THE CLOUD ===
+        # Reshape (Height, Width) -> (Total_Points,)
+        pc_np = pc_np.reshape(-1)
+        # ==============================
+
+        # Now extract coordinates
+        points = np.zeros((pc_np.shape[0], 3), dtype=np.float64)
+        points[:,0] = pc_np['x']
+        points[:,1] = pc_np['y']
+        points[:,2] = pc_np['z']
+        
+        # Filter NaNs (Crucial for Depth Cameras)
+        valid_mask = ~np.isnan(points).any(axis=1)
+        points = points[valid_mask]
+        
+        if len(points) == 0: return
+
+        # Handle RGB Packing
+        # (This logic remains the same, but now operates on the flattened array)
+        rgb_f32 = pc_np['rgb'][valid_mask]
+        rgb_u32 = rgb_f32.view(np.uint32)
+        r = ((rgb_u32 >> 16) & 0xFF) / 255.0
+        g = ((rgb_u32 >> 8) & 0xFF) / 255.0
+        b = (rgb_u32 & 0xFF) / 255.0
+        colors = np.stack([r, g, b], axis=-1)
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+
+        # ... (Rest of the function remains identical) ...
+
+        # -----------------------------------------------------------
+        # STEP 1: Transform to Base
+        # -----------------------------------------------------------
         try:
             trans = self.tf_buffer.lookup_transform("base", msg.header.frame_id, rospy.Time(0), rospy.Duration(0.1))
-        except Exception:
-            return
+            t_vec = [trans.transform.translation.x, trans.transform.translation.y, trans.transform.translation.z]
+            q = [trans.transform.rotation.w, trans.transform.rotation.x, trans.transform.rotation.y, trans.transform.rotation.z]
+            R = o3d.geometry.get_rotation_matrix_from_quaternion(q)
+            T = np.eye(4)
+            T[:3, :3] = R; T[:3, 3] = t_vec
+            pcd.transform(T)
+        except Exception: return
 
-        # 2. Parse Raw Data (Camera Frame)
-        point_step = msg.point_step
-        raw_data = np.frombuffer(msg.data, dtype=np.uint8)
-        try:
-            raw_data = raw_data.reshape(-1, point_step)
-        except ValueError:
-            return
+        # DEBUG STEP 1
+        self.publish_o3d(pcd, self.pub_step1, "base")
+        self.visualize_step(pcd, "Step 1: Transformed Cloud")
 
-        # Get Field Offsets
-        x_off = next((f.offset for f in msg.fields if f.name == 'x'), 0)
-        y_off = next((f.offset for f in msg.fields if f.name == 'y'), 4)
-        z_off = next((f.offset for f in msg.fields if f.name == 'z'), 8)
-        rgb_off = next((f.offset for f in msg.fields if f.name == 'rgb'), None)
-
-        if rgb_off is None: return
-
-        # Extract & Cast to Float (N, )
-        x = np.ascontiguousarray(raw_data[:, x_off:x_off+4]).view(np.float32).reshape(-1)
-        y = np.ascontiguousarray(raw_data[:, y_off:y_off+4]).view(np.float32).reshape(-1)
-        z = np.ascontiguousarray(raw_data[:, z_off:z_off+4]).view(np.float32).reshape(-1)
-        rgb = np.ascontiguousarray(raw_data[:, rgb_off:rgb_off+4]).view(np.float32).reshape(-1)
-
-        # 3. Apply Transform (Manually)
-        t_vec, R_mat = get_transformation_matrix(trans)
-        points_camera = np.vstack((x, y, z)).T 
+        # -----------------------------------------------------------
+        # STEP 2: Crop to ROI
+        # -----------------------------------------------------------
+        bbox = o3d.geometry.AxisAlignedBoundingBox(
+            min_bound=self.roi_bounds[:3], 
+            max_bound=self.roi_bounds[3:]
+        )
+        # To help visualize, let's create a wireframe of the box
+        bbox.color = (1, 0, 0) # Red box
         
-        # P_base = R * P_cam + T
-        points_base = np.dot(points_camera, R_mat.T) + t_vec
-
-        x_base = points_base[:, 0]
-        y_base = points_base[:, 1]
-        z_base = points_base[:, 2]
-
-        # 4. Store Result
-        mask = ~np.isnan(x_base)
-        cloud_arr = np.zeros(np.sum(mask), dtype=[('x', np.float32), ('y', np.float32), ('z', np.float32), ('rgb', np.float32)])
-        cloud_arr['x'] = x_base[mask]
-        cloud_arr['y'] = y_base[mask]
-        cloud_arr['z'] = z_base[mask]
-        cloud_arr['rgb'] = rgb[mask]
-
-        with self.lock:
-            self.points_data = cloud_arr
-
-    def generate_tensor(self):
-        with self.lock:
-            if self.points_data is None: return None
-            data = self.points_data
-
-        # ROI Filter
-        mask = (data['x'] >= self.roi_x_min) & (data['x'] < self.roi_x_max) & \
-               (data['y'] >= self.roi_y_min) & (data['y'] < self.roi_y_max)
-        roi_points = data[mask]
-
-        tensor_map = np.zeros((self.img_height, self.img_width, 6), dtype=np.float32)
-        if len(roi_points) == 0: return tensor_map
-
-        # Quantization
-        u = ((roi_points['x'] - self.roi_x_min) / self.resolution).astype(int)
-        v = ((roi_points['y'] - self.roi_y_min) / self.resolution).astype(int)
+        pcd_cropped = pcd.crop(bbox)
         
+        # DEBUG STEP 2
+        self.publish_o3d(pcd_cropped, self.pub_step2, "base")
+        if DEBUG_STEP_BY_STEP:
+             # Show the cropped cloud AND the bounding box
+            self.visualize_step(pcd_cropped, "Step 2: Cropped (Red Box is ROI)")
+
+        if len(pcd_cropped.points) == 0: return
+
+        # -----------------------------------------------------------
+        # STEP 3: Voxelization & Outlier Removal
+        # -----------------------------------------------------------
+        pcd_down = pcd_cropped.voxel_down_sample(voxel_size=self.voxel_size)
+        pcd_clean, _ = pcd_down.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+
+        # DEBUG STEP 3
+        self.publish_o3d(pcd_clean, self.pub_step3, "base")
+        self.visualize_step(pcd_clean, "Step 3: Voxelized & Cleaned")
+
+        # -----------------------------------------------------------
+        # STEP 4: Tensor Generation (Projection)
+        # -----------------------------------------------------------
+        # (This logic converts 3D -> 2D Grid)
+        xyz = np.asarray(pcd_clean.points)
+        rgb = np.asarray(pcd_clean.colors)
+
+        u = ((xyz[:, 0] - self.roi_bounds[0]) / self.grid_res).astype(int)
+        v = ((xyz[:, 1] - self.roi_bounds[1]) / self.grid_res).astype(int)
         u = np.clip(u, 0, self.img_width - 1)
         v = np.clip(v, 0, self.img_height - 1)
 
-        # Z-Buffer
-        sort_idx = np.argsort(roi_points['z'])
+        tensor_map = np.zeros((self.img_height, self.img_width, 6), dtype=np.float32)
+        
+        # Sort by Z
+        sort_idx = np.argsort(xyz[:, 2])
         u, v = u[sort_idx], v[sort_idx]
-        p_sorted = roi_points[sort_idx]
+        tensor_map[v, u, 0:3] = xyz[sort_idx]
+        tensor_map[v, u, 3:6] = rgb[sort_idx]
 
-        # Fill Geometry
-        tensor_map[v, u, 0] = p_sorted['x']
-        tensor_map[v, u, 1] = p_sorted['y']
-        tensor_map[v, u, 2] = p_sorted['z']
-
-        # Fill Color (FIXED CONTIGUOUS ERROR HERE)
-        # We enforce contiguous memory before viewing as uint8
-        rgb_bytes = np.ascontiguousarray(p_sorted['rgb'])
-        rgb_u8 = rgb_bytes.view(np.uint8).reshape(-1, 4)
-        
-        tensor_map[v, u, 3] = rgb_u8[:, 2].astype(np.float32) / 255.0 # R
-        tensor_map[v, u, 4] = rgb_u8[:, 1].astype(np.float32) / 255.0 # G
-        tensor_map[v, u, 5] = rgb_u8[:, 0].astype(np.float32) / 255.0 # B
-
-        return tensor_map
-
-    def run_inference(self):
-        np_tensor = self.generate_tensor()
-        if np_tensor is None: return
-
-        # Convert to PyTorch (Batch, Channel, Height, Width)
-        tensor_torch = torch.from_numpy(np_tensor).permute(2, 0, 1).unsqueeze(0).to(self.device)
-
-        with torch.no_grad():
-            output = self.model(tensor_torch)
-        
-        # print(f"Inference Done. Output Shape: {output.shape}")
+        # DEBUG STEP 4: Visualize the RGB part of the tensor
+        if PUBLISH_DEBUG_TOPICS:
+            # Extract RGB channels (3,4,5), scale to 0-255 uint8
+            rgb_img = (tensor_map[:, :, 3:6] * 255).astype(np.uint8)
+            # Create ROS Image
+            img_msg = ros_numpy.msgify(Image, rgb_img, encoding='rgb8')
+            self.pub_tensor.publish(img_msg)
 
 if __name__ == "__main__":
-    try:
-        node = PerceptionAINode()
-        rate = rospy.Rate(30) # Run at 30Hz
-        while not rospy.is_shutdown():
-            node.run_inference()
-            rate.sleep()
-    except rospy.ROSInterruptException:
-        pass
+    node = PerceptionDebugger()
+    rospy.spin()
