@@ -52,7 +52,7 @@ def main():
             rospy.logwarn("Toss at speed {:.2f} m/s failed.".format(desired_speed))
 
         desired_speed += 0.1
-        if desired_speed > 2.1:
+        if desired_speed > 2.0:
             rospy.loginfo("Completed all tosses.")
             break
 

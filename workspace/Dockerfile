@@ -11,9 +11,19 @@ RUN apt update && apt install -y --no-install-recommends \
     fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py && \
+python2 get-pip.py && \
+rm get-pip.py
+
+# Now install legacy libraries
+# We use 'python2 -m pip' to be explicit
+RUN python2 -m pip install --upgrade "pip<21.0"
+RUN python2 -m pip install numpy
+RUN python2 -m pip install --no-cache-dir \
+    casadi==3.5.5 \
+    scipy==1.2.3 \
+    matplotlib==2.2.5 
     
-
-
 # 1. Install Python 3.8 from PPA
 RUN apt-get update && apt-get install -y software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
@@ -117,8 +127,7 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-joint-state-publisher-gui \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir casadi==3.5.5
-RUN pip install scipy
+
 
 
 RUN apt update && apt install --no-install-recommends -y \
