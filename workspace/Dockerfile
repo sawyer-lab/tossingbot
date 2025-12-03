@@ -211,13 +211,6 @@ RUN ln -s /plain_perception ~/ros_ws/src/.
 RUN ln -s /tossing ~/ros_ws/src/.
 RUN ln -s /grasping ~/ros_ws/src/.
 
-# RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
-
-# Pull the latest changes from all the cloned repositories
-# RUN cd ~/ros_ws/src/sawyer_robot && git pull
-# RUN cd ~/ros_ws/src/sawyer_simulator && git pull
-# RUN cd ~/ros_ws/src/sns_ik && git pull
-
-
 RUN /ros_entrypoint.sh catkin_make
 RUN echo "export GAZEBO_MODEL_PATH=\$GAZEBO_MODEL_PATH:~/ros_ws/src/environments/models" >> ~/.bashrc
+RUN echo "source devel/setup.bash" >> ~/.bashrc
