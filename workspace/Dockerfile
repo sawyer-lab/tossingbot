@@ -35,6 +35,12 @@ RUN apt-get update && apt-get install -y software-properties-common && \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install system libraries required by OpenCV (and Open3D)
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # 2. Install Pip for Python 3.8 (Legacy URL)
 RUN curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py && python3.8 get-pip.py && rm get-pip.py
 
@@ -52,7 +58,8 @@ RUN python3.8 -m pip install \
     stable-baselines3 \
     gymnasium \
     tensorboard \
-    shimmy
+    shimmy \ 
+    opencv-python
 
 # Install ros_numpy directly from GitHub (since it's not on PyPI)
 RUN python3.8 -m pip install git+https://github.com/eric-wieser/ros_numpy.git
@@ -213,3 +220,4 @@ RUN ln -s /grasping ~/ros_ws/src/.
 
 
 RUN /ros_entrypoint.sh catkin_make
+RUN export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:~/ros_ws/src/environments/models
