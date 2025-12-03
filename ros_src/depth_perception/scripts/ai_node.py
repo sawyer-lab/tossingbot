@@ -83,9 +83,6 @@ class PerceptionDebugger:
             o3d.visualization.draw_geometries([geometry, axis], window_name=title)
 
     def publish_o3d(self, pcd, publisher, frame_id):
-        """
-        Helper: Converts Open3D -> ROS PointCloud2 for Rviz
-        """
         if not PUBLISH_DEBUG_TOPICS: return
         
         points = np.asarray(pcd.points)
@@ -93,21 +90,33 @@ class PerceptionDebugger:
         
         colors = np.asarray(pcd.colors) # Float 0..1
         
-        # Create structured array for ros_numpy
-        # We pack RGB float back into the specific ROS structure
+        # 1. Convert to 0-255 uint32
+        r = (colors[:, 0] * 255).astype(np.uint32)
+        g = (colors[:, 1] * 255).astype(np.uint32)
+        b = (colors[:, 2] * 255).astype(np.uint32)
+        
+        # 2. Pack RGB into 32-bit integer
+        # === THE FIX: Swap 'r' and 'b' positions here ===
+        # Previous: (r << 16) | (g << 8) | b 
+        # New (BGR packing):
+        rgb_uint32 = (b << 16) | (g << 8) | r  
+        
+        # 3. Cast to float32
+        rgb_float = rgb_uint32.view(np.float32)
+
+        # 4. Create structured array
         data = np.zeros(len(points), dtype=[
-            ('x', np.float32), ('y', np.float32), ('z', np.float32),
-            ('r', np.uint8), ('g', np.uint8), ('b', np.uint8)
+            ('x', np.float32), 
+            ('y', np.float32), 
+            ('z', np.float32),
+            ('rgb', np.float32)
         ])
+        
         data['x'] = points[:, 0]
         data['y'] = points[:, 1]
         data['z'] = points[:, 2]
-        data['r'] = (colors[:, 0] * 255).astype(np.uint8)
-        data['g'] = (colors[:, 1] * 255).astype(np.uint8)
-        data['b'] = (colors[:, 2] * 255).astype(np.uint8)
+        data['rgb'] = rgb_float
 
-        # Use ros_numpy to create the message
-        # Note: We manually create the 'rgb' float field usually, but splitting r,g,b works in Rviz too
         msg = ros_numpy.msgify(PointCloud2, data)
         msg.header.frame_id = frame_id
         msg.header.stamp = rospy.Time.now()
@@ -222,12 +231,21 @@ class PerceptionDebugger:
         tensor_map[v, u, 3:6] = rgb[sort_idx]
 
         # DEBUG STEP 4: Visualize the RGB part of the tensor
+        # DEBUG STEP 4: Visualize the RGB part of the tensor
         if PUBLISH_DEBUG_TOPICS:
             # Extract RGB channels (3,4,5), scale to 0-255 uint8
             rgb_img = (tensor_map[:, :, 3:6] * 255).astype(np.uint8)
+            
             # Create ROS Image
             img_msg = ros_numpy.msgify(Image, rgb_img, encoding='rgb8')
+            
+            # --- FIX START: Add Header Information ---
+            img_msg.header.frame_id = "base" # Or "map", whatever your fixed frame is
+            img_msg.header.stamp = rospy.Time.now()
+            # --- FIX END ---
+            
             self.pub_tensor.publish(img_msg)
+
 
 if __name__ == "__main__":
     node = PerceptionDebugger()
