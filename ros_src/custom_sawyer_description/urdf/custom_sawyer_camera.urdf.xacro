@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <robot name="sawyer" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-    <xacro:include filename="$(find custom_sawyer_description)/urdf/camera_2D.xacro"/>
-    <xacro:include filename="$(find custom_sawyer_description)/urdf/camera_2D_gazebo.xacro"/>
+    <!-- <xacro:include filename="$(find custom_sawyer_description)/urdf/camera_2D.xacro"/>
+    <xacro:include filename="$(find custom_sawyer_description)/urdf/camera_2D_gazebo.xacro"/> -->
 
         <xacro:include filename="$(find custom_sawyer_description)/urdf/kinetic_rgb.urdf.xacro"/>
 
@@ -41,11 +41,15 @@
   </xacro:if>
 
 
-    <xacro:kinetic_rgb name="rgbd_camera" parent="base">
-        <origin xyz="0.1 0.0 1.3" rpy="${0.0 * deg_to_rad} ${70.0 * deg_to_rad} ${0.0 * deg_to_rad}"/>
+    <xacro:kinetic_rgb name="rgbd_camera_right" parent="base">
+        <origin xyz="0.8 -0.4 0.5" rpy="${0.0 * deg_to_rad} ${60.0 * deg_to_rad} ${90.0 * deg_to_rad}"/>
         <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
     </xacro:kinetic_rgb>
 
+    <xacro:kinetic_rgb name="rgbd_camera_left" parent="base">
+        <origin xyz="0.8 0.4 0.5" rpy="${0.0 * deg_to_rad} ${60.0 * deg_to_rad} ${-90.0 * deg_to_rad}"/>
+        <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
+    </xacro:kinetic_rgb>
   
 
 </robot>

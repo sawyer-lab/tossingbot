@@ -220,4 +220,4 @@ RUN ln -s /grasping ~/ros_ws/src/.
 
 
 RUN /ros_entrypoint.sh catkin_make
-RUN export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:~/ros_ws/src/environments/models
+RUN echo "export GAZEBO_MODEL_PATH=\$GAZEBO_MODEL_PATH:~/ros_ws/src/environments/models" >> ~/.bashrc
