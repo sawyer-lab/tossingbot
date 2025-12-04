@@ -651,9 +651,19 @@
     </model>
     <state world_name='default'>
       <sim_time>87 216000000</sim_time>
-      <real_time>5 760108282</real_time>
-      <wall_time>1764732478 156776442</wall_time>
-      <iterations>5757</iterations>
+      <real_time>0 0</real_time>
+      <wall_time>1764787015 319633188</wall_time>
+      <iterations>0</iterations>
+      <model name='banana'>
+        <pose frame=''>0.461129 0.019465 0.832449 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>0.461129 0.019465 0.832449 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
       <model name='ground_plane'>
         <pose frame=''>0 1 0 0 -0 0</pose>
         <scale>1 1 1</scale>
@@ -662,16 +672,6 @@
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
-        </link>
-      </model>
-      <model name='spoon'>
-        <pose frame=''>0.838617 -0.071483 0.748632 -0.121844 0.041534 -0.833442</pose>
-        <scale>1 1 1</scale>
-        <link name='link'>
-          <pose frame=''>0.838617 -0.071483 0.748632 -0.121844 0.041534 -0.833442</pose>
-          <velocity>7.4e-05 -0.000846 -0.01665 -0.455568 0.970614 -0.008664</velocity>
-          <acceleration>0 0 -9.8 -0.061313 -0.027566 -0.313627</acceleration>
-          <wrench>0 0 -0.000238 0 -0 0</wrench>
         </link>
       </model>
       <model name='table'>
@@ -748,7 +748,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>2.01238 -1.94633 1.7723 0 0.483641 1.83619</pose>
+        <pose frame=''>1.63885 -2.62683 3.51784 0 0.73964 1.86019</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
@@ -1316,25 +1316,25 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>1.5 1.5 1.5 0 -0 0</pose>
     </model>
-    <model name='spoon'>
+    <model name='banana'>
       <static>0</static>
       <link name='link'>
         <inertial>
-          <pose frame=''>-0.018056 -0.010161 0.010049 0 -0 0</pose>
-          <mass>2.4321e-05</mass>
+          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
+          <mass>0.000171533</mass>
           <inertia>
-            <ixx>9.0962e-08</ixx>
-            <ixy>1.19914e-24</ixy>
-            <ixz>2.40279e-24</ixz>
-            <iyy>9.03858e-08</iyy>
-            <iyz>1.49675e-23</iyz>
-            <izz>1.18194e-09</izz>
+            <ixx>4.27199e-07</ixx>
+            <ixy>1.59304e-23</ixy>
+            <ixz>-1.75631e-23</ixz>
+            <iyy>4.10766e-07</iyy>
+            <iyz>1.79147e-23</iyz>
+            <izz>4.07539e-08</izz>
           </inertia>
         </inertial>
         <collision name='collision'>
           <geometry>
             <mesh>
-              <uri>model://031_spoon/google_16k/textured.obj</uri>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
             </mesh>
           </geometry>
           <surface>
@@ -1354,13 +1354,13 @@
         <visual name='visual'>
           <geometry>
             <mesh>
-              <uri>model://031_spoon/google_16k/textured.obj</uri>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
             </mesh>
           </geometry>
           <material>
             <script>
-              <uri>model://031_spoon/spoon.material</uri>
-              <name>spoon</name>
+              <uri>model://011_banana/banana.material</uri>
+              <name>banana</name>
             </script>
           </material>
         </visual>
@@ -1368,7 +1368,7 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose frame=''>-0.037429 -0.642594 0 0 -0 0</pose>
+      <pose frame=''>-0.606457 0.019465 0 0 -0 0</pose>
     </model>
   </world>
 </sdf>

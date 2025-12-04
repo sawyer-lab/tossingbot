@@ -14,6 +14,7 @@ import torch
 import message_filters
 import copy
 import cv2
+import actionlib
 
 from sensor_msgs.msg import PointCloud2, Image
 from std_srvs.srv import Empty
@@ -21,11 +22,14 @@ from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState, GetModelState
 from geometry_msgs.msg import Pose, Point, Quaternion
 
+# Make sure your package is sourced so python3 finds these msgs
+from grasping.msg import GraspAction, GraspGoal
+
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
 # Bounds (Robot Frame)
-ROI_X = [0.65, 1.0]    
+ROI_X = [0.45, 0.7]    
 ROI_Y = [-0.3, 0.3] 
 ROI_Z = [-0.1, 0.5]   
 
@@ -38,8 +42,39 @@ IMG_W = int((ROI_X[1] - ROI_X[0]) / GRID_RES)
 IMG_H = int((ROI_Y[1] - ROI_Y[0]) / GRID_RES)
 
 PUBLISH_DEBUG = True
-OBJECT_NAME = "spoon"
+OBJECT_NAME = "banana"
 # ==============================================================================
+
+class GraspClient:
+    def __init__(self):
+        self.action_name = 'grasping_action'
+        self.client = actionlib.SimpleActionClient(self.action_name, GraspAction)
+        
+        rospy.loginfo(f"Waiting for '{self.action_name}' server...")
+        connected = self.client.wait_for_server(timeout=rospy.Duration(5.0))
+        
+        if connected:
+            rospy.loginfo("Connected to Grasping Server!")
+        else:
+            rospy.logwarn("Grasping Server NOT detected. Actions will fail.")
+
+    def execute_grasp(self, x, y, z):
+        """Sends the goal to the Python 2 Server. Returns: bool (Action Success)"""
+        goal = GraspGoal()
+        goal.target_position = Point(x=x, y=y, z=z)
+        goal.orientation_index = 0 
+        
+        rospy.loginfo(f"Sending Grasp Goal: [{x:.3f}, {y:.3f}, {z:.3f}]")
+        self.client.send_goal(goal)
+        
+        finished = self.client.wait_for_result(timeout=rospy.Duration(20.0))
+        
+        if not finished:
+            rospy.logwarn("Grasp Action Timed Out!")
+            self.client.cancel_goal()
+            return False
+        
+        return self.client.get_result().success
 
 class GazeboEnv:
     def __init__(self):
@@ -61,6 +96,8 @@ class GazeboEnv:
         rospy.wait_for_service('/gazebo/get_model_state')
         self.set_state_srv = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.get_state_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
+
+        self.grasp_client = GraspClient()
         
         # Subscribe to both topics
         left_sub = message_filters.Subscriber("/rgbd_camera_left/depth/points", PointCloud2)
@@ -93,8 +130,9 @@ class GazeboEnv:
         rand_x = np.random.uniform(ROI_X[0]+0.1, ROI_X[1]-0.1)
         rand_y = np.random.uniform(ROI_Y[0]+0.1, ROI_Y[1]-0.1)
         
+        # Reset height 0.8 so it drops onto table
         state_msg.pose.position = Point(rand_x, rand_y, 0.8)
-        state_msg.pose.orientation = Quaternion(-0.00374595104945, 0.0031389867495, -0.648059770085, 0.761573797482)
+        state_msg.pose.orientation = Quaternion(0, 0, 0, 1)
 
         try:
             self.set_state_srv(state_msg)
@@ -105,7 +143,9 @@ class GazeboEnv:
     def _check_success(self):
         try:
             resp = self.get_state_srv(OBJECT_NAME, "world")
+            # print(resp)
             if not resp.success: return False
+            # If Z > 0.90 (lifted significantly above table start)
             return resp.pose.position.z > 0.90
         except rospy.ServiceException as e:
             return False
@@ -162,13 +202,9 @@ class GazeboEnv:
     # --------------------------------------------------------------------------
 
     def pixel_to_world(self, u, v):
-      
         world_x = ROI_X[0] + (v * GRID_RES) + (GRID_RES / 2.0)
         world_y = ROI_Y[0] + (u * GRID_RES) + (GRID_RES / 2.0)
-        
-
-        world_z = 0.78
-        
+        world_z = 0.07 # Fixed Z as requested
         return np.array([world_x, world_y, world_z])
 
     def reset(self):
@@ -176,11 +212,26 @@ class GazeboEnv:
         return self.get_observation()
 
     def step(self, pixel_u, pixel_v):
+        # 1. Convert Pixel -> World
         target_pos = self.pixel_to_world(pixel_u, pixel_v)
+        
         rospy.loginfo(f"ACTION: Grasping at X={target_pos[0]:.3f}, Y={target_pos[1]:.3f}, Z={target_pos[2]:.3f}")
-        rospy.sleep(1.0)
-        success = self._check_success()
-        return 1.0 if success else 0.0
+
+        # 2. EXECUTE GRASP
+        action_success = self.grasp_client.execute_grasp(
+            target_pos[0], 
+            target_pos[1], 
+            target_pos[2]
+        )
+        
+        if not action_success:
+            rospy.logwarn("Robot failed to reach target (IK or Motion Error)")
+            return 0.0 
+
+        # 3. CHECK SUCCESS 
+        physical_success = self._check_success()
+        
+        return 1.0 if physical_success else 0.0
 
     def get_observation(self):
         if self.latest_pcd_combined is None: return None
@@ -214,7 +265,6 @@ class GazeboEnv:
         if PUBLISH_DEBUG:
             img_uint8 = (tensor_map * 255).astype(np.uint8)
             msg = ros_numpy.msgify(Image, img_uint8, encoding='rgb8')
-            # --- FIX: ADD HEADER INFO FOR RVIZ ---
             msg.header.frame_id = "base"
             msg.header.stamp = rospy.Time.now()
             self.pub_tensor.publish(msg)
@@ -222,17 +272,14 @@ class GazeboEnv:
         return torch.from_numpy(tensor_map).permute(2, 0, 1)
 
     def publish_o3d(self, pcd, publisher):
-        """Publishes PointCloud2 with Correct RGB Encoding"""
         points = np.asarray(pcd.points)
         colors = np.asarray(pcd.colors)
         if len(points) == 0: return
 
-        # 1. Float 0..1 -> Int 0..255
         r = (colors[:, 0] * 255).astype(np.uint32)
         g = (colors[:, 1] * 255).astype(np.uint32)
         b = (colors[:, 2] * 255).astype(np.uint32)
         
-        # --- FIX: BGR PACKING (Robot was blue, now it's red) ---
         rgb_uint32 = (b << 16) | (g << 8) | r 
         rgb_float = rgb_uint32.view(np.float32)
 
@@ -240,27 +287,51 @@ class GazeboEnv:
         data['x'], data['y'], data['z'], data['rgb'] = points[:,0], points[:,1], points[:,2], rgb_float
         
         msg = ros_numpy.msgify(PointCloud2, data)
-        # --- FIX: ADD HEADER ---
         msg.header.frame_id = "base"
         msg.header.stamp = rospy.Time.now()
         publisher.publish(msg)
 
-# ==============================================================================
-# MAIN: OPENCV VISUALIZATION
+
 # ==============================================================================
 # MAIN: INTERACTIVE TEST MODE
 # ==============================================================================
 if __name__ == "__main__":
-    import cv2
     env = GazeboEnv()
     
     rospy.loginfo("--- RUNNING IN INTERACTIVE DEBUG MODE ---")
     rospy.loginfo("Controls:")
-    rospy.loginfo("  [r] -> Reset Spoon Position")
-    rospy.loginfo("  [c] -> Check Success (Is it lifted?)")
-    rospy.loginfo("  [q] -> Quit")
+    rospy.loginfo("  [Click] -> Command Robot to Grasp that pixel")
+    rospy.loginfo("  [r]     -> Reset Spoon Position")
+    rospy.loginfo("  [c]     -> Check Success (Is it lifted?)")
+    rospy.loginfo("  [q]     -> Quit")
 
+    WINDOW_NAME = "Dual Camera Input"
+    cv2.namedWindow(WINDOW_NAME)
+
+    # --- MOUSE CALLBACK ---
+    def mouse_callback(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # OpenCV x,y corresponds to Col, Row (v, u)
+            v, u = x, y
+            
+            # Since we display a resized 512x512 image, we must map back to Original Grid
+            # The tensor is (IMG_H, IMG_W). The window is (512, 512).
+            scale_x = IMG_W / 512.0
+            scale_y = IMG_H / 512.0
+            
+            real_v = int(v * scale_x)
+            real_u = int(u * scale_y)
+            
+            rospy.loginfo(f"CLICK: Window({x},{y}) -> Grid({real_u},{real_v})")
+            
+            # Execute Step
+            reward = env.step(real_u, real_v)
+            rospy.loginfo(f"STEP COMPLETE. Reward: {reward}")
+
+    cv2.setMouseCallback(WINDOW_NAME, mouse_callback)
+    
     rate = rospy.Rate(10)
+    
     
     while not rospy.is_shutdown():
         # 1. Get Observation & Visualize
@@ -271,30 +342,23 @@ if __name__ == "__main__":
             img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
             img_large = cv2.resize(img_bgr, (512, 512), interpolation=cv2.INTER_NEAREST)
             
-            # Overlay status text on image
-            cv2.putText(img_large, "Press 'r' to Reset, 'c' to Check", (10, 30), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(img_large, "Click to Grasp | r: Reset | q: Quit", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             
-            cv2.imshow("Dual Camera Input", img_large)
+            cv2.imshow(WINDOW_NAME, img_large)
 
         # 2. Handle Keyboard Inputs
         key = cv2.waitKey(1) & 0xFF
         
         if key == ord('q'):
             break
-        
         elif key == ord('r'):
-            rospy.loginfo("Testing Reset...")
+            rospy.loginfo("Resetting...")
             env.reset()
-            rospy.loginfo("Reset Complete.")
-            
         elif key == ord('c'):
-            rospy.loginfo("Checking Success...")
             is_picked = env._check_success()
-            if is_picked:
-                rospy.loginfo("RESULT: SUCCESS (Spoon is in the air!)")
-            else:
-                rospy.logwarn("RESULT: FAIL (Spoon is on the table)")
+            msg = "SUCCESS" if is_picked else "FAIL"
+            rospy.loginfo(f"Check Result: {msg}")
 
         rate.sleep()
         

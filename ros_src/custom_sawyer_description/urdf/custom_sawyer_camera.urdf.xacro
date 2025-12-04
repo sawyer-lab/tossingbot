@@ -27,27 +27,27 @@
     </xacro:include>
   </xacro:if>
 
-  <!-- <xacro:if value="$(arg electric_gripper)">
+   <xacro:if value="$(arg electric_gripper)">
     <xacro:include filename="$(find sawyer_description)/urdf/sawyer_electric_gripper.urdf.xacro">
       <xacro:arg name="gazebo" value="${gazebo}"/>
     </xacro:include>
-  </xacro:if> -->
+  </xacro:if> 
 
 
-    <xacro:if value="$(arg electric_gripper)">
+    <!-- <xacro:if value="$(arg electric_gripper)">
   <xacro:include filename="$(find pneumatic_gripper_description)/urdf/pneumatic_gripper.urdf.xacro">
     <xacro:arg name="gazebo" value="${gazebo}"/>
   </xacro:include>
   </xacro:if>
-
+ -->
 
     <xacro:kinetic_rgb name="rgbd_camera_right" parent="base">
-        <origin xyz="0.8 -0.4 0.5" rpy="${0.0 * deg_to_rad} ${60.0 * deg_to_rad} ${90.0 * deg_to_rad}"/>
+        <origin xyz="0.55 -0.6 0.5" rpy="${0.0 * deg_to_rad} ${60.0 * deg_to_rad} ${90.0 * deg_to_rad}"/>
         <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
     </xacro:kinetic_rgb>
 
     <xacro:kinetic_rgb name="rgbd_camera_left" parent="base">
-        <origin xyz="0.8 0.4 0.5" rpy="${0.0 * deg_to_rad} ${60.0 * deg_to_rad} ${-90.0 * deg_to_rad}"/>
+        <origin xyz="0.55 0.6 0.5" rpy="${0.0 * deg_to_rad} ${60.0 * deg_to_rad} ${-90.0 * deg_to_rad}"/>
         <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
     </xacro:kinetic_rgb>
   
