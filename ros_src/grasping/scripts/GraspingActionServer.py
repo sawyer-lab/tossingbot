@@ -1,26 +1,28 @@
 #!/usr/bin/env python
-
 import rospy
 import actionlib
 import os
+import numpy as np
 from geometry_msgs.msg import Point, Pose, Quaternion
 from grasping.msg import GraspAction, GraspFeedback, GraspResult
 from intera_interface import Limb, Gripper
-# We don't need servo_to_pose anymore if we use the planner for everything
-# from servo import servo_to_pose 
 from cartesian_planner import CasadiIKPlanner
 
-class GraspingActionServer:
+class GraspingActionServer(object):
     
     def __init__(self):
+        # 1. Initialize Node
+        rospy.init_node('Grasping_action_server')
+        
         self.server = actionlib.SimpleActionServer('grasping_action', GraspAction, self.execute, False)
         self.server.start()
         
+        # 2. Configuration
+        self.control_freq = 100.0 # Hz
+        self.rate = rospy.Rate(self.control_freq) # The heartbeat
         self.hover_distance = 0.30
-        self.tip_name = "right_gripper_tip" # Ensuring we control the tip, not wrist
-        self.rate = rospy.Rate(100)
+        self.tip_name = "right_gripper_tip" 
         
-        # 90 degrees around Y-axis (Points Z-axis straight down)
         self.orientations = [
             Quaternion(
                              x=-0.00142460053167,
@@ -29,139 +31,124 @@ class GraspingActionServer:
                              w=0.00253311793936)
         ]
         
-        # --- PLANNER SETUP ---
-        # Ensure this path is correct inside your container/system!
-        self.urdf_path = "/home/kid/ros_ws/src/grasping/sawyer_model.urdf" 
-        
-        if not os.path.exists(self.urdf_path):
-            rospy.logerr("URDF File not found at: " + self.urdf_path)
-            rospy.logerr("Please run: rosrun xacro xacro --inorder ... > sawyer_model.urdf")
-        else:
-            rospy.loginfo("Loading CasADi Planner...")
-            self.planner = CasadiIKPlanner(self.urdf_path, base_link="base", end_link=self.tip_name)
-            rospy.loginfo("Grasping Action Server is READY.")
+        # 3. Hardware Interfaces
+        self.limb = Limb("right")
+        self.gripper = Gripper()
+        self.joint_names = self.limb.joint_names()
 
+        # 4. Planner Setup
+        self.urdf_path = "/home/kid/ros_ws/src/grasping/sawyer_model.urdf" 
+        if not os.path.exists(self.urdf_path):
+            rospy.logerr("URDF File not found at: {}".format(self.urdf_path))
+        else:
+            self.planner = CasadiIKPlanner(self.urdf_path, base_link="base", end_link=self.tip_name)
+            rospy.loginfo("Grasping Server READY @ {} Hz".format(self.control_freq))
 
     def execute(self, goal):
-        feedback = GraspFeedback()
         result = GraspResult()
+        feedback = GraspFeedback()
         
-        rospy.loginfo("\n" + "="*30)
-        rospy.loginfo("NEW GOAL RECEIVED")
-        rospy.loginfo("Target: [x={:.3f}, y={:.3f}, z={:.3f}]".format(
+        # Python 2 string formatting
+        rospy.loginfo("GOAL: [{:.3f}, {:.3f}, {:.3f}]".format(
             goal.target_position.x, goal.target_position.y, goal.target_position.z))
 
-        try:
-            self.limb = Limb("right")
-            self.gripper = Gripper()
-        except:
-            rospy.logerr("[ERROR] Failed to initialize limb/gripper.")
-            result.success = False
-            self.server.set_aborted(result)
-            return
-        
-        # ---------------------------------------------------------
-        # Step 1: Hover
-        # ---------------------------------------------------------
+        # --- STEP 1: HOVER ---
         feedback.current_step = "Hovering"
         self.server.publish_feedback(feedback)
         
-        hover_z = goal.target_position.z + self.hover_distance
-        
         hover_pose = Pose(
-            position=Point(
-                x=goal.target_position.x,
-                y=goal.target_position.y,
-                z=hover_z
-            ),
+            position=Point(x=goal.target_position.x, 
+                           y=goal.target_position.y, 
+                           z=goal.target_position.z + self.hover_distance),
             orientation=self.orientations[goal.orientation_index]
         )
         
-        rospy.loginfo("[STEP 1] Moving to Hover (using Planner)...")
-        moved = self.move_to_pose(hover_pose)
-        
-        if not moved:
-            rospy.logwarn("[FAIL] Planner could not reach Hover Pose.")
-            result.success = False
+        # Move fast (2.0 seconds)
+        if not self.move_to_pose_smooth(hover_pose, duration=2.0):
             self.server.set_aborted(result)
             return
 
-        # ---------------------------------------------------------
-        # Step 2: Grasp
-        # ---------------------------------------------------------
-        rospy.loginfo("[STEP 2] Opening Gripper & Descending...")
-        self.gripper.open()
-        
-        feedback.current_step = "Grasping"
+        # --- STEP 2: GRASP DESCENT ---
+        feedback.current_step = "Descending"
         self.server.publish_feedback(feedback)
+        self.gripper.open()
         
         grasp_pose = Pose(
             position=goal.target_position,
             orientation=self.orientations[goal.orientation_index]
         )
         
-        # --- FIX: Use move_to_pose (Planner) instead of servo_to_pose ---
-        # This ensures the Soft Orientation Constraint is applied!
-        reached_grasp = self.move_to_pose(grasp_pose)
-        
-        # Check Error
-        current_pose = self.limb.endpoint_pose()
-        z_error = abs(current_pose["position"].z - grasp_pose.position.z)
-        rospy.loginfo("[DEBUG] Descent Finished. Vertical Error: {:.4f} m".format(z_error))
-        
-        if z_error > 0.05: # If we are more than 5cm away, something is wrong
-             rospy.logwarn("Grasp descent didn't reach target strictly. Closing anyway.")
+        # Move slower for precision (2.5 seconds)
+        if not self.move_to_pose_smooth(grasp_pose, duration=2.5):
+            self.server.set_aborted(result)
+            return
 
+        # --- STEP 3: ACTUATE GRIPPER ---
+        feedback.current_step = "Closing Gripper"
+        self.server.publish_feedback(feedback)
         self.gripper.close()
-        rospy.sleep(0.5) 
+        
+        # Wait 0.5s (keeping 100Hz sync)
+        self.wait_duration(0.5)
 
-        # ---------------------------------------------------------
-        # Step 3: Retract
-        # ---------------------------------------------------------
+        # --- STEP 4: RETRACT ---
         feedback.current_step = "Retracting"
         self.server.publish_feedback(feedback)
         
-        rospy.loginfo("[STEP 3] Retracting...")
-        # Reuse planner to pull back up smoothly
-        self.move_to_pose(hover_pose)
+        # Move up (2.0 seconds)
+        self.move_to_pose_smooth(hover_pose, duration=2.0)
 
-        # ---------------------------------------------------------
-        # Completion
-        # ---------------------------------------------------------
-        rospy.loginfo("[SUCCESS] Action Complete.")
+        # --- DONE ---
         result.success = True
         self.server.set_succeeded(result)
+
+    def move_to_pose_smooth(self, target_pose, duration):
+        """
+        Calculates the exact number of steps needed to hit 100Hz
+        and streams them to the robot.
+        """
+        # 1. Calculate required resolution
+        # Force float division just in case
+        num_steps = int(duration * self.control_freq)
         
-    def move_to_pose(self, pose):
-        """
-        Uses CasADi Planner to move from Current -> Target
-        """
-        # 1. Get Current Joint Config
+        # 2. Get Current Config
         current_joints = self.limb.joint_angles()
-        joint_names = ['right_j0', 'right_j1', 'right_j2', 'right_j3', 'right_j4', 'right_j5', 'right_j6']
-        q_start = [current_joints[n] for n in joint_names]
+        q_start = [current_joints[n] for n in self.joint_names]
         
-        # 2. Extract Target
-        target_p = [pose.position.x, pose.position.y, pose.position.z]
-        target_q = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+        target_p = [target_pose.position.x, target_pose.position.y, target_pose.position.z]
+        target_q = [target_pose.orientation.x, target_pose.orientation.y, target_pose.orientation.z, target_pose.orientation.w]
         
-        # 3. Plan Path (15 steps is usually good for a short 15cm move)
-        # Note: If moving far (Hover -> Start), maybe increase steps inside the planner class or pass it here
-        path = self.planner.plan_path(q_start, target_p, target_q, steps=20)
+        # 3. Plan Path (High Resolution)
+        path = self.planner.plan_path(q_start, target_p, target_q, steps=num_steps)
         
-        if path:
-            # 4. Execute Path
-            for q_step in path:
-                cmd = dict(zip(joint_names, q_step))
-                self.limb.set_joint_positions(cmd)
-                # Small sleep to allow robot to reach setpoint. 
-                # Decrease for smoother/faster motion, Increase for accuracy.
-                rospy.sleep(0.04) 
-            return True
-        else:
+        if path is None or len(path) == 0:
+            rospy.logerr("Planner failed to find path.")
             return False
 
+        # 4. Stream at 100Hz
+        for q_step in path:
+            # Check for Preemption (Safety)
+            if self.server.is_preempt_requested():
+                self.server.set_preempted()
+                return False
+
+            # Send Command
+            # zip returns a list of tuples in Python 2, which is fine for dict()
+            cmd = dict(zip(self.joint_names, q_step))
+            self.limb.set_joint_positions(cmd)
+            
+            # Sleep specifically to maintain 100Hz
+            self.rate.sleep()
+            
+        return True
+
+    def wait_duration(self, seconds):
+        """Waits for X seconds while keeping the node alive at 100Hz"""
+        ticks = int(seconds * self.control_freq)
+        # xrange is slightly more efficient in Py2 for loops, but range is fine too
+        for _ in range(ticks):
+            self.rate.sleep()
+
 if __name__ == "__main__":
-    rospy.init_node('Grasping_action_server')
     server = GraspingActionServer()
     rospy.spin()

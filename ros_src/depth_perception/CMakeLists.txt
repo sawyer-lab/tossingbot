@@ -28,7 +28,3 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
-
-add_executable(voxel src/voxel.cpp)
-target_link_libraries(voxel ${catkin_LIBRARIES})
-add_dependencies(voxel ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
