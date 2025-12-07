@@ -26,6 +26,7 @@ docker run -d --rm \
     --mount type=bind,source=./ros_src/plain_perception,target=/plain_perception \
     --mount type=bind,source=./ros_src/tossing,target=/tossing \
     --mount type=bind,source=./ros_src/grasping,target=/grasping \
+    --mount type=bind,source=./ros_src/tossing_system,target=/tossing_system \
     --name robo2025 \
     -it \
     robo2025-workspace:latest "$@"

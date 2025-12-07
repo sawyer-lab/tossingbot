@@ -59,7 +59,10 @@ RUN python3.8 -m pip install \
     gymnasium \
     tensorboard \
     shimmy \ 
-    opencv-python
+    opencv-python \ 
+    casadi \
+    scipy \
+    matplotlib
 
 # Install ros_numpy directly from GitHub (since it's not on PyPI)
 RUN python3.8 -m pip install git+https://github.com/eric-wieser/ros_numpy.git
@@ -210,6 +213,7 @@ RUN ln -s /.vscode ~/ros_ws/src/.
 RUN ln -s /plain_perception ~/ros_ws/src/.
 RUN ln -s /tossing ~/ros_ws/src/.
 RUN ln -s /grasping ~/ros_ws/src/.
+RUN ln -s /tossing_system ~/ros_ws/src/.
 
 RUN /ros_entrypoint.sh catkin_make
 RUN echo "export GAZEBO_MODEL_PATH=\$GAZEBO_MODEL_PATH:~/ros_ws/src/environments/models" >> ~/.bashrc
