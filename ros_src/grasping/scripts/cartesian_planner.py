@@ -208,6 +208,8 @@ class CasadiIKPlanner(object):
         # Variables: N_dof x Steps
         # We optimize the trajectory from k=1 to k=Steps (k=0 is fixed at q_start)
         Q = opti.variable(self.model.n_dof, steps)
+
+        TABLE_HEIGHT = 0.02
         
         total_cost = 0
         
@@ -235,6 +237,8 @@ class CasadiIKPlanner(object):
             pose = self.model.fk_pos_quat(q_k)
             pos_k = pose[0:3]
             quat_k = pose[3:7]
+
+            opti.subject_to(pos_k[2] >= TABLE_HEIGHT)
             
             # 3. Cartesian Linear Target for this step
             alpha = float(k + 1) / float(steps)
