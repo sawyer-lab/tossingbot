@@ -117,3 +117,4 @@ class TossingBot(nn.Module):
         g = self.grasp_conv_final(g)
         
         return g
+    

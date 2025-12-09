@@ -35,3 +35,16 @@ class ReplayBuffer:
 
     def __len__(self):
         return len(self.memory)
+    
+    def push_rotational(self, state, u, v, rot, reward):
+        if state is not None: state_cpu = state.cpu()
+        else: return
+
+        # Store 5 items
+        transition = (state_cpu, u, v, rot, float(reward))
+        
+        if len(self.memory) < self.capacity:
+            self.memory.append(transition)
+        else:
+            self.memory[self.position] = transition
+            self.position = (self.position + 1) % self.capacity
