@@ -156,9 +156,20 @@ class ManualRotationalTrainer:
 
     def train_burst(self):
         total_loss = 0.0
+        
+        # Guard: Don't train if buffer is empty
+        if len(self.buffer) == 0:
+            return
+
         for _ in range(GRADIENT_STEPS):
-            batch = self.buffer.sample(min(len(self.buffer), BATCH_SIZE))
+            # Sample (Safely handle small buffers)
+            sample_size = min(len(self.buffer), BATCH_SIZE)
+            batch = self.buffer.sample(sample_size)
             
+            # GUARD: If sampling returned empty list, skip
+            if not batch:
+                continue
+
             b_states = [x[0] for x in batch]; b_u = [x[1] for x in batch]
             b_v = [x[2] for x in batch]; b_rot = [x[3] for x in batch]
             b_rew = torch.tensor([x[4] for x in batch], dtype=torch.float32).to(self.device).unsqueeze(1)
@@ -178,6 +189,9 @@ class ManualRotationalTrainer:
                 u_n, v_n = self.transformer.rotate_pixel(b_u[i], b_v[i], angle, H, W, to_gripper_frame=True)
                 rotated_pixels.append((u_n, v_n))
 
+            # Safety check before stacking
+            if len(rotated_imgs) == 0: continue
+
             tensor_input = torch.stack(rotated_imgs) 
             self.optimizer.zero_grad()
             logits = self.model(tensor_input)
@@ -185,6 +199,12 @@ class ManualRotationalTrainer:
             pred_vals = []
             for i in range(len(batch)):
                 u_p, v_p = rotated_pixels[i]
+                
+                # Clamp coordinates to be inside heatmap
+                H_out, W_out = logits.shape[2:]
+                u_p = min(max(u_p, 0), H_out - 1)
+                v_p = min(max(v_p, 0), W_out - 1)
+                
                 val = logits[i, 0, u_p, v_p]
                 pred_vals.append(val)
             pred_vals = torch.stack(pred_vals).unsqueeze(1)

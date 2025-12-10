@@ -76,35 +76,58 @@ class AutoTrainer:
 
             # 1. FORWARD PASS
             with torch.no_grad():
-                # We need full_vol for decision, and others for vis
-                full_vol, rotated_inputs, raw_heatmaps = self.forward_multi_view(state_gpu)
+                # raw_heatmaps are in the ROTATED frame (matching the input images)
+                _, rotated_inputs, raw_heatmaps = self.forward_multi_view(state_gpu)
                 
-                # Apply Mask (Ignore corners)
-                full_vol = self.apply_workspace_mask(full_vol)
+                # Apply mask to the RAW heatmaps
+                # raw_heatmaps = self.apply_workspace_mask(raw_heatmaps)
 
-            # 2. SELECT ACTION (Greedy Argmax)
-            # Find the best pixel across ALL rotations and ALL locations
-            flat_idx = torch.argmax(full_vol).item()
+            # 2. SELECT ACTION (Greedy Argmax on RAW ROTATED MAPS)
+            flat_idx = torch.argmax(raw_heatmaps).item()
             
-            H, W = full_vol.shape[1:]
-            rot_idx = flat_idx // (H * W)
-            rem = flat_idx % (H * W)
-            u = rem // W
-            v = rem % W
+            # [FIX] Use -2: to grab the last two dims (Height, Width) 
+            # regardless of whether the shape is (N, C, H, W) or (N, H, W)
+            H, W = raw_heatmaps.shape[-2:] 
             
-            conf = torch.sigmoid(full_vol[rot_idx, u, v]).item()
-
+            # Calculate the area per rotation (Stride)
+            # We must account for the Channel dimension if it exists
+            C = raw_heatmaps.shape[1] 
+            stride = C * H * W 
+            
+            # Map flat index to Rotation Index
+            rot_idx = flat_idx // stride
+            
+            # Find the remainder to get local pixel (u,v)
+            rem = flat_idx % stride
+            # If C > 1, we need to mod out the channel too, but assuming C=1 for grasping:
+            pixel_idx = rem % (H * W)
+            
+            u_rot = pixel_idx // W   # Row (Y)
+            v_rot = pixel_idx % W    # Col (X)
+            
+            # Select confidence
+            conf = torch.sigmoid(raw_heatmaps[rot_idx, 0, u_rot, v_rot]).item()
             angle_deg = self.env.rot_helper.get_angle(rot_idx)
-            rospy.loginfo(f"Step {self.step_count} | Action: Rot {rot_idx} ({angle_deg:.0f}) @ ({u},{v}) | Conf: {conf:.2f}")
+
+            rospy.loginfo(f"Step {self.step_count} | Action: Rot {rot_idx} | Conf: {conf:.2f}")
+
+            # 3. VISUALIZE (Correct Alignment)
+            # Now u_rot, v_rot ARE in the rotated frame, so they will match the image perfectly.
+            self.visualize_dashboard(state, rotated_inputs, raw_heatmaps, rot_idx, u_rot, v_rot, conf)
             
-            # --- VISUALIZE BEFORE ACTING ---
-            self.visualize_dashboard(state, rotated_inputs, raw_heatmaps, rot_idx, u, v, conf)
+            # 4. EXECUTE (Convert to World for Robot)
+            # Now we consciously un-rotate for the robot execution
+            u_world, v_world = self.transformer.rotate_pixel(
+                u_rot, v_rot, 
+                angle_deg, 
+                H, W, 
+                to_gripper_frame=False
+            )
             
-            # 3. EXECUTE
-            reward = self.env.step(u, v, rot_idx)
+            reward = self.env.step(u_world, v_world, rot_idx)
             
-            # 4. STORE & LEARN
-            self.buffer.push_rotational(state, u, v, rot_idx, reward)
+            # 5. BUFFER (Store World Coords)
+            self.buffer.push_rotational(state, u_world, v_world, rot_idx, reward)
             
             if self.step_count % TRAIN_INTERVAL == 0 and len(self.buffer) > BATCH_SIZE:
                 self.train_burst()
@@ -134,12 +157,17 @@ class AutoTrainer:
 
     def apply_workspace_mask(self, heatmap_vol):
         """Zero out corners to prevent hallucination."""
-        C, H, W = heatmap_vol.shape
+        # [FIX] Robustly get H and W regardless of 3D or 4D input
+        H, W = heatmap_vol.shape[-2:]
+        
         cy, cx = H // 2, W // 2
         radius = min(H, W) // 2 - 2
+        
         Y, X = np.ogrid[:H, :W]
         dist = np.sqrt((X - cx)**2 + (Y - cy)**2)
         mask = torch.from_numpy(dist <= radius).float().to(self.device)
+        
+        # Broadcasting handles the (N, C, H, W) vs (H, W) multiplication automatically
         return heatmap_vol * mask + (1 - mask) * -100.0
 
     def train_burst(self):
@@ -186,57 +214,91 @@ class AutoTrainer:
         img = tensor_img.permute(1, 2, 0).cpu().numpy()
         return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    def visualize_dashboard(self, state, rotated_inputs, raw_heatmaps, chosen_rot, u, v, conf):
+    def visualize_dashboard(self, state, rotated_inputs, raw_heatmaps, chosen_rot, u_rot, v_rot, conf):
         """
-        Shows 4 Pairs side-by-side: [ Input 0 | Map 0 ] [ Input 45 | Map 45 ] ...
+        Top: 4 Rotation Pairs.
+        Bottom: Large Global View with re-mapped target.
         """
+        # --- TOP HALF: ROTATED VIEWS ---
         pairs = []
         for i in range(NUM_ROTATIONS):
-            # Input
+            # 1. Input Image
             input_cv = self._tensor_to_cv(rotated_inputs[i])
             
-            # Heatmap
+            # 2. Heatmap
             h = raw_heatmaps[i].squeeze(0).cpu().numpy()
             h = 1.0 / (1.0 + np.exp(-h))
             h_img = (h * 255).astype(np.uint8)
             heatmap_cv = cv2.applyColorMap(h_img, cv2.COLORMAP_JET)
-
+            
+            # Resize if needed
             if heatmap_cv.shape[:2] != input_cv.shape[:2]:
                 heatmap_cv = cv2.resize(heatmap_cv, (input_cv.shape[1], input_cv.shape[0]), interpolation=cv2.INTER_NEAREST)
-            
-            # Draw Gripper Line
-            H, W, _ = input_cv.shape
-            cx, cy = W // 2, H // 2
-            cv2.line(input_cv, (cx, cy-15), (cx, cy+15), (0, 255, 0), 2)
 
-            pair = np.hstack([input_cv, heatmap_cv])
-
-            label = f"Rot {i*45}"
+            # 3. Draw Selected Point (If this is the chosen rotation)
             if i == chosen_rot:
-                # Highlight Selected Action
-                cv2.rectangle(pair, (0,0), (pair.shape[1]-1, pair.shape[0]-1), (0,255,0), 3)
-                label += " (ACT)"
+                # Draw Red Dot on Input (Where the net clicked)
+                cv2.circle(input_cv, (v_rot, u_rot), 3, (0, 0, 255), -1)
+                # Draw White Dot on Heatmap
+                cv2.circle(heatmap_cv, (v_rot, u_rot), 3, (255, 255, 255), -1)
                 
-                # Draw the specific pixel picked on the rotated view
-                # We need to map world (u,v) -> rotated (u_n, v_n) to show it here
-                angle = self.env.rot_helper.get_angle(i)
-                u_n, v_n = self.transformer.rotate_pixel(u, v, angle, H, W, to_gripper_frame=True)
-                cv2.circle(input_cv, (v_n, u_n), 3, (0,0,255), -1) # Red Dot on Input
-                cv2.circle(heatmap_cv, (v_n, u_n), 3, (255,255,255), -1) # White Dot on Map
-                
-                # Re-stack because we drew on them
+                # Combine
                 pair = np.hstack([input_cv, heatmap_cv])
-            
+                
+                # Green Border for Selection
+                cv2.rectangle(pair, (0,0), (pair.shape[1]-1, pair.shape[0]-1), (0,255,0), 3)
+                label = f"Rot {i*45} (CHOSEN)"
+            else:
+                pair = np.hstack([input_cv, heatmap_cv])
+                label = f"Rot {i*45}"
+
             cv2.putText(pair, label, (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1)
             pairs.append(pair)
+            
+        # Stack pairs horizontally into one long strip
+        top_row = np.hstack(pairs)
 
-        # Layout: Horizontal Strip
-        strip = np.hstack(pairs)
-        final = cv2.resize(strip, (0,0), fx=2.0, fy=2.0, interpolation=cv2.INTER_NEAREST)
+        # --- BOTTOM HALF: WORLD VIEW ---
+        # 1. Get Base Image
+        world_rgb = self._tensor_to_cv(state)
+        H, W, _ = world_rgb.shape
         
-        cv2.putText(final, f"Step: {self.step_count} Loss: {self.current_loss:.4f} Conf: {conf:.2f}", (10, final.shape[0]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+        # 2. Map the (u_rot, v_rot) back to World Pixel (u_world, v_world)
+        # We use the transformer logic to "Un-Rotate" the pixel
+        angle = self.env.rot_helper.get_angle(chosen_rot)
+        
+        # NOTE: rotate_pixel(..., to_gripper=False) means "Un-rotate"
+        u_world, v_world = self.transformer.rotate_pixel(u_rot, v_rot, angle, H, W, to_gripper_frame=False)
+        
+        # 3. Draw the Target on World View
+        # Dot (Location)
+        cv2.circle(world_rgb, (v_world, u_world), 3, (0, 255, 0), -1) 
+        
+        # Arrow (Orientation)
+        # Note: We visualize the robot's physical rotation
+        # If angle=0, arrow points Right (Standard 0)
+        # If angle=90, arrow points Up (Standard 90)
+        # BUT: Image Y is flipped. So +90 means Down visually if we use sin/cos directly.
+        # Let's align with the previous manual tester logic:
+        angle_rad = np.deg2rad(-angle) 
+        end_x = int(v_world + 30 * np.cos(angle_rad))
+        end_y = int(u_world + 30 * np.sin(angle_rad))
+        cv2.arrowedLine(world_rgb, (v_world, u_world), (end_x, end_y), (0, 0, 255), 2)
 
-        cv2.imshow("Auto Brain", final)
+        
+
+        # --- FINAL LAYOUT ---
+        # Resize Bottom to match Top width
+        scale = top_row.shape[1] / world_rgb.shape[1]
+        new_h = int(world_rgb.shape[0] * scale)
+        bottom_row = cv2.resize(world_rgb, (top_row.shape[1], new_h), interpolation=cv2.INTER_NEAREST)
+        
+        final_grid = np.vstack([top_row, bottom_row])
+        
+        # Zoom for visibility
+        final_large = cv2.resize(final_grid, (0,0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
+
+        cv2.imshow("Auto Brain", final_large)
         cv2.waitKey(1)
 
 if __name__ == "__main__":
