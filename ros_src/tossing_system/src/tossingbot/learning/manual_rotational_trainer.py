@@ -10,12 +10,12 @@ import rospy
 import rospkg
 import torchvision.transforms.functional as TF
 
-# --- IMPORTS ---
-from tossingbot import config # <--- CRITICAL: Use Config for dimensions
+from tossingbot import config
 from tossingbot.env.rotational_env import RotationalEnv
 from tossingbot.learning.network import TossingBot
 from tossingbot.learning.buffer import ReplayBuffer
 from tossingbot.perception.rotation_transform import RotationTransform
+
 
 # --- CONFIG ---
 LEARNING_RATE = 2e-4
@@ -50,13 +50,13 @@ class ManualRotationalTrainer:
         self.step_count = 0
         self.current_loss = 0.0
         
-        self.selected_rot_idx = 0 
+        # --- STATE ---
+        self.selected_rot_idx = 0  # <--- THE MASTER INDEX
         self.pending_click = None
         self.last_reward = None
         
-        # --- UI CALIBRATION CONSTANTS ---
-        # We force the display to be this size, matching calibrate_coords.py
-        self.DISPLAY_SIZE = 500 
+        # Simple Zoom for Display (No resizing tricks)
+        self.ZOOM = 4.0 
         
         cv2.namedWindow("Manual Calibration", cv2.WINDOW_NORMAL)
         cv2.setMouseCallback("Manual Calibration", self._mouse_cb)
@@ -68,6 +68,7 @@ class ManualRotationalTrainer:
     def run(self):
         rospy.loginfo("--- MANUAL ROTATION MODE ---")
         rospy.loginfo(f"Grid Size: {config.IMG_H}x{config.IMG_W}")
+        rospy.loginfo("Press 'r' to cycle rotation. Click Left Image to execute.")
         
         while not rospy.is_shutdown():
             state = self.env.get_observation()
@@ -76,14 +77,16 @@ class ManualRotationalTrainer:
             state_gpu = state.unsqueeze(0).to(self.device)
 
             with torch.no_grad():
-                # heatmap_vol, rotated_inputs, raw_heatmaps
+                # We need these for visualization only
                 full_vol, rotated_inputs, raw_heatmaps = self.forward_multi_view(state_gpu)
 
             # --- INPUT HANDLING ---
             key = cv2.waitKey(20) & 0xFF
             if key == ord('r'):
+                # Cycle Index: 0 -> 1 -> 2 -> 3 -> 0
                 self.selected_rot_idx = (self.selected_rot_idx + 1) % NUM_ROTATIONS
-                print(f"Selected Rotation: {self.env.rot_helper.get_angle(self.selected_rot_idx)} deg")
+                print(f"Selected Rotation Index: {self.selected_rot_idx}")
+                
             elif key == ord('q'):
                 break
 
@@ -91,35 +94,33 @@ class ManualRotationalTrainer:
                 win_x, win_y = self.pending_click
                 self.pending_click = None 
                 
-                # --- 1. COORDINATE MAPPING (Logic from calibrate_coords.py) ---
-                
-                # Calculate Scaling Factor (Grid / Window)
-                scale_x = config.IMG_W / float(self.DISPLAY_SIZE)
-                scale_y = config.IMG_H / float(self.DISPLAY_SIZE)
-                
-                # Check if click is inside the "Global View" (Leftmost Panel)
-                if win_x < self.DISPLAY_SIZE and win_y < self.DISPLAY_SIZE:
+                # --- 1. COORDINATE MAPPING ---
+                # UI Layout: [ Main View ] [ Net Input ] [ Net Output ]
+                # Each panel width = IMG_W * ZOOM
+                panel_width = int(config.IMG_W * self.ZOOM)
+                panel_height = int(config.IMG_H * self.ZOOM)
+
+                # Ignore clicks outside the Global View (Left Panel)
+                if win_x < panel_width and win_y < panel_height:
                     
-                    v = int(win_x * scale_x) # Col
-                    u = int(win_y * scale_y) # Row
+                    v = int(win_x / self.ZOOM)
+                    u = int(win_y / self.ZOOM)
                     
-                    # Clamp to Grid
+                    # Clamp
                     v = min(max(v, 0), config.IMG_W - 1)
                     u = min(max(u, 0), config.IMG_H - 1)
                     
+                    # USE THE SELECTED INDEX
                     rot_idx = self.selected_rot_idx
-                    angle_deg = self.env.rot_helper.get_angle(rot_idx)
                     
-                    # Debug Mapping
-                    world_target = self.env.vision.pixel_to_world(u, v)
-                    rospy.loginfo(f"CLICK: Win({win_x},{win_y}) -> Grid({u},{v}) -> World{np.round(world_target, 3)}")
+                    rospy.loginfo(f"CLICK -> Grid({u},{v}) | Rotation Index: {rot_idx}")
                     
                     # --- 2. VISUAL CONFIRMATION ---
-                    # Draw a purple dot WHERE THE ROBOT WILL GO so you can verify before it moves
                     self.visualize_manual(state, rotated_inputs, raw_heatmaps, click_marker=(v, u))
-                    cv2.waitKey(200) # Pause to show the dot
+                    cv2.waitKey(200) 
                     
                     # --- 3. EXECUTE ---
+                    # Pass the exact index to the environment
                     reward = self.env.step(u, v, rot_idx)
                     self.last_reward = reward
                     
@@ -132,10 +133,7 @@ class ManualRotationalTrainer:
                     
                     self.env.reset()
                     self.step_count += 1
-                else:
-                    rospy.logwarn("Click ignored: Please click in the Left-Most 'Global View' panel.")
 
-            # Visualize
             self.visualize_manual(state, rotated_inputs, raw_heatmaps)
 
     def forward_multi_view(self, state_tensor):
@@ -168,15 +166,16 @@ class ManualRotationalTrainer:
             rotated_imgs = []; rotated_pixels = [] 
             for i in range(len(batch)):
                 state = b_states[i].to(self.device)
+                
+                # USE THE INDEX FROM BUFFER
                 rot_idx = b_rot[i]
-                u_orig, v_orig = b_u[i], b_v[i]
                 angle = self.env.rot_helper.get_angle(rot_idx)
                 
                 rot_img = self.transformer.to_gripper_frame(state, angle)
                 rotated_imgs.append(rot_img)
                 
                 H, W = state.shape[1], state.shape[2]
-                u_n, v_n = self.transformer.rotate_pixel(u_orig, v_orig, angle, H, W, to_gripper_frame=True)
+                u_n, v_n = self.transformer.rotate_pixel(b_u[i], b_v[i], angle, H, W, to_gripper_frame=True)
                 rotated_pixels.append((u_n, v_n))
 
             tensor_input = torch.stack(rotated_imgs) 
@@ -203,51 +202,54 @@ class ManualRotationalTrainer:
         return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
     def visualize_manual(self, state, rotated_inputs, raw_heatmaps, click_marker=None):
+        # USE THE MASTER INDEX
         idx = self.selected_rot_idx
         angle_deg = self.env.rot_helper.get_angle(idx)
 
-        # 1. Main View (Global View) - Resized to FIXED DISPLAY SIZE
+        # 1. Main View (Global)
         main_rgb = self._tensor_to_cv(state)
+        main_disp = cv2.resize(main_rgb, (0,0), fx=self.ZOOM, fy=self.ZOOM, interpolation=cv2.INTER_NEAREST)
         
-        # Explicit resize to 500x500 to match click logic
-        main_disp = cv2.resize(main_rgb, (self.DISPLAY_SIZE, self.DISPLAY_SIZE), interpolation=cv2.INTER_NEAREST)
+        # Dimensions
+        H_disp, W_disp, _ = main_disp.shape
+        cx, cy = W_disp // 2, H_disp // 2
         
-        # Draw Arrow (Center of Display)
-        cx, cy = self.DISPLAY_SIZE // 2, self.DISPLAY_SIZE // 2
+        # Draw Orientation Arrow (Matches Robot Yaw)
+        # Yaw is inverted relative to image space, so we use -angle
         angle_rad = np.deg2rad(-angle_deg) 
         end_x = int(cx + 40 * np.cos(angle_rad))
         end_y = int(cy + 40 * np.sin(angle_rad))
         cv2.arrowedLine(main_disp, (cx, cy), (end_x, end_y), (0, 0, 255), 3)
-        cv2.putText(main_disp, "Global (Click Here)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
         
-        # Draw Marker if clicked (Scale grid to display)
         if click_marker:
-            grid_v, grid_u = click_marker
-            disp_x = int(grid_v * (self.DISPLAY_SIZE / config.IMG_W))
-            disp_y = int(grid_u * (self.DISPLAY_SIZE / config.IMG_H))
-            cv2.circle(main_disp, (disp_x, disp_y), 5, (255, 0, 255), -1)
+            v, u = click_marker
+            dx, dy = int(v * self.ZOOM), int(u * self.ZOOM)
+            cv2.circle(main_disp, (dx, dy), 5, (255, 0, 255), -1)
 
-        # 2. Network View (Input) - Resized to match Main Height
+        # 2. Net Input (What the network sees for THIS index)
         net_input = self._tensor_to_cv(rotated_inputs[idx])
-        net_disp = cv2.resize(net_input, (self.DISPLAY_SIZE, self.DISPLAY_SIZE), interpolation=cv2.INTER_NEAREST)
-        cv2.line(net_disp, (cx, cy-30), (cx, cy+30), (0, 255, 0), 2) # Vertical Ref
-        cv2.putText(net_disp, f"Net Input (Rot {idx})", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-
-        # 3. Heatmap View - Resized
+        net_disp = cv2.resize(net_input, (W_disp, H_disp), interpolation=cv2.INTER_NEAREST)
+        
+        # 3. Net Output (Raw heatmap for THIS index)
         h = raw_heatmaps[idx].squeeze(0).cpu().numpy()
         h = 1.0 / (1.0 + np.exp(-h))
         h_img = (h * 255).astype(np.uint8)
         heatmap_cv = cv2.applyColorMap(h_img, cv2.COLORMAP_JET)
-        heatmap_disp = cv2.resize(heatmap_cv, (self.DISPLAY_SIZE, self.DISPLAY_SIZE), interpolation=cv2.INTER_NEAREST)
+        heatmap_disp = cv2.resize(heatmap_cv, (W_disp, H_disp), interpolation=cv2.INTER_NEAREST)
 
-        # Layout: [Global] [NetIn] [NetOut]
+        # Layout
         row = np.hstack([main_disp, net_disp, heatmap_disp])
         
-        # Stats Overlay
+        # Labels
+        cv2.putText(row, f"ROT IDX: {idx} ({angle_deg:.0f} deg)", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(row, "GLOBAL VIEW", (10, H_disp-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+        cv2.putText(row, "NET INPUT (Rotated)", (W_disp+10, H_disp-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+        cv2.putText(row, "CONFIDENCE", (W_disp*2+10, H_disp-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+
         if self.last_reward is not None:
              res = "SUCCESS" if self.last_reward > 0.5 else "FAIL"
              col = (0, 255, 0) if self.last_reward > 0.5 else (0, 0, 255)
-             cv2.putText(row, f"LAST: {res}", (10, self.DISPLAY_SIZE - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, col, 2)
+             cv2.putText(row, f"LAST: {res}", (W_disp-150, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2)
 
         cv2.imshow("Manual Calibration", row)
 

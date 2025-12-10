@@ -75,7 +75,7 @@ class CasadiPlanner:
         for k in range(self.SOLVER_STEPS):
             opti.set_initial(Q[:, k], q_start)
             
-        opts = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'ipopt.max_iter': 500}
+        opts = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'ipopt.max_iter': 500, 'print_time': 0}
         opti.solver('ipopt', opts)
         
         try:
@@ -153,7 +153,7 @@ class CasadiPlanner:
         q_target = ca.DM(target_quat)
         
         W_POS = 1000.0
-        W_ORI = 50.0 # Reduced from previous/implied high values
+        W_ORI = 5000.0 # Reduced from previous/implied high values
         W_REG = 0.5  # New Regularization Weight
 
         for k in range(self.SOLVER_STEPS):
