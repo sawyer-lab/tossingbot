@@ -74,6 +74,36 @@ class SawyerInterface:
         """Returns [q0, q1, ... q6] in the correct order."""
         if not self._received_state: return [0.0] * 7
         return [self._curr_joints[n] for n in self._joint_names]
+    
+    def move_to_joint_positions(self, target_joints: List[float], timeout: float = 1.0):
+        """
+        Moves to target joint positions with a strict TIMEOUT.
+        Prevents infinite loops if the robot cannot reach the exact tolerance.
+        """
+        tolerance = 0.015 # Slightly relaxed tolerance
+        max_error = 100.0
+        
+        # Create a command chunk (0.1 seconds worth of data)
+        cmd = RobotCommand(position=target_joints)
+        chunk = [cmd] * 10 
+        
+        start_time = rospy.Time.now()
+
+        while max_error > tolerance and not rospy.is_shutdown():
+            # --- 1. TIMEOUT CHECK ---
+            elapsed = (rospy.Time.now() - start_time).to_sec()
+            if elapsed > timeout:
+                rospy.logwarn(f"⚠️ MOVE TIMEOUT: Aborting. Final Error: {max_error:.4f} rad")
+                break # <--- This breaks the infinite loop
+
+            # --- 2. EXECUTE ---
+            # Send commands for 0.1s
+            self.execute_stream(chunk, ControlMode.POSITION)
+            
+            # --- 3. FEEDBACK ---
+            current = self.get_joint_positions()
+            errors = [abs(c - t) for c, t in zip(current, target_joints)]
+            max_error = max(errors)
 
 
     def execute_stream(self, stream: List[RobotCommand], mode: int) -> bool:

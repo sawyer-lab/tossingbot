@@ -69,9 +69,7 @@ class RosCamera:
             c2 = ((rgb >> 8) & 0xFF) / 255.0
             c3 = (rgb & 0xFF) / 255.0
             
-            # THE FIX: If banana was Blue, we swap C1 and C3.
-            # We want strict RGB output for PyTorch.
-            # Try [c3, c2, c1] (Swap Red/Blue)
+
             colors = np.stack([c3, c2, c1], axis=-1)
 
             points_transformed = self._apply_transform(points, trans)

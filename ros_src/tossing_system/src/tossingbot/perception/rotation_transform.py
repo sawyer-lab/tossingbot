@@ -3,33 +3,19 @@ import numpy as np
 import torchvision.transforms.functional as TF
 
 class RotationTransform:
-    """
-    Central logic for rotating Tensors and Pixels between 
-    World Frame and Gripper (Aligned) Frame.
-    """
-    
     @staticmethod
     def to_gripper_frame(tensor, angle_deg):
-        """
-        Rotates World Image -> Aligned Gripper View.
-        Convention: Rotates by -angle.
-        """
-        # TF.rotate handles interpolation and padding automatically
+
         return TF.rotate(tensor, -angle_deg)
 
     @staticmethod
     def to_world_frame(tensor, angle_deg):
-        """
-        Rotates Aligned Heatmap -> World View.
-        Convention: Rotates by +angle.
-        """
+
         return TF.rotate(tensor, angle_deg)
 
     @staticmethod
     def rotate_pixel(u, v, angle_deg, h, w, to_gripper_frame=True):
-        """
-        Rotates a pixel coordinate (u=row, v=col) around the image center.
-        """
+
         # Determine direction
         eff_angle = -angle_deg if to_gripper_frame else angle_deg
         angle_rad = np.deg2rad(eff_angle)
@@ -41,9 +27,7 @@ class RotationTransform:
         y = u - cy
         x = v - cx
         
-        # Standard 2D Rotation Matrix
-        # x' = x cos - y sin
-        # y' = x sin + y cos
+
         x_new = x * np.cos(angle_rad) - y * np.sin(angle_rad)
         y_new = x * np.sin(angle_rad) + y * np.cos(angle_rad)
         

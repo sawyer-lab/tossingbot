@@ -66,8 +66,8 @@
     <atmosphere type='adiabatic'/>
     <physics name='default_physics' default='0' type='ode'>
       <max_step_size>0.001</max_step_size>
-      <real_time_factor>1.0</real_time_factor>
-      <real_time_update_rate>1000.0</real_time_update_rate>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
     </physics>
     <scene>
       <ambient>0.4 0.4 0.4 1</ambient>
@@ -652,13 +652,63 @@
     <state world_name='default'>
       <sim_time>87 216000000</sim_time>
       <real_time>0 0</real_time>
-      <wall_time>1764787015 319633188</wall_time>
+      <wall_time>1765639018 64611494</wall_time>
       <iterations>0</iterations>
-      <model name='banana'>
+      <model name='banana_4'>
         <pose frame=''>0.461129 0.019465 0.832449 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
           <pose frame=''>0.461129 0.019465 0.832449 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='banana_0'>
+        <pose frame=''>-1.08444 0.487744 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.08444 0.487744 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='banana_1'>
+        <pose frame=''>-1.16336 -0.028301 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.16336 -0.028301 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='banana_2'>
+        <pose frame=''>-1.40681 0.200766 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.40681 0.200766 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='banana_3'>
+        <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='banana_4'>
+        <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -748,7 +798,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>1.63885 -2.62683 3.51784 0 0.73964 1.86019</pose>
+        <pose frame=''>1.63656 -2.62751 3.51784 0 0.73964 1.86019</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
@@ -1316,7 +1366,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>1.5 1.5 1.5 0 -0 0</pose>
     </model>
-    <model name='banana'>
+    <model name='banana_4'>
       <static>0</static>
       <link name='link'>
         <inertial>
@@ -1369,6 +1419,222 @@
         <kinematic>0</kinematic>
       </link>
       <pose frame=''>-0.606457 0.019465 0 0 -0 0</pose>
+    </model>
+    <model name='banana_0'>
+      <static>0</static>
+      <link name='link'>
+        <inertial>
+          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
+          <mass>0.000171533</mass>
+          <inertia>
+            <ixx>4.27199e-07</ixx>
+            <ixy>1.59304e-23</ixy>
+            <ixz>-1.75631e-23</ixz>
+            <iyy>4.10766e-07</iyy>
+            <iyz>1.79147e-23</iyz>
+            <izz>4.07539e-08</izz>
+          </inertia>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://011_banana/banana.material</uri>
+              <name>banana</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.08444 0.487744 0 0 -0 0</pose>
+    </model>
+    <model name='banana_1'>
+      <static>0</static>
+      <link name='link'>
+        <inertial>
+          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
+          <mass>0.000171533</mass>
+          <inertia>
+            <ixx>4.27199e-07</ixx>
+            <ixy>1.59304e-23</ixy>
+            <ixz>-1.75631e-23</ixz>
+            <iyy>4.10766e-07</iyy>
+            <iyz>1.79147e-23</iyz>
+            <izz>4.07539e-08</izz>
+          </inertia>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://011_banana/banana.material</uri>
+              <name>banana</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.16336 -0.028301 0 0 -0 0</pose>
+    </model>
+    <model name='banana_2'>
+      <static>0</static>
+      <link name='link'>
+        <inertial>
+          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
+          <mass>0.000171533</mass>
+          <inertia>
+            <ixx>4.27199e-07</ixx>
+            <ixy>1.59304e-23</ixy>
+            <ixz>-1.75631e-23</ixz>
+            <iyy>4.10766e-07</iyy>
+            <iyz>1.79147e-23</iyz>
+            <izz>4.07539e-08</izz>
+          </inertia>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://011_banana/banana.material</uri>
+              <name>banana</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.40681 0.200766 0 0 -0 0</pose>
+    </model>
+    <model name='banana_3'>
+      <static>0</static>
+      <link name='link'>
+        <inertial>
+          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
+          <mass>0.000171533</mass>
+          <inertia>
+            <ixx>4.27199e-07</ixx>
+            <ixy>1.59304e-23</ixy>
+            <ixz>-1.75631e-23</ixz>
+            <iyy>4.10766e-07</iyy>
+            <iyz>1.79147e-23</iyz>
+            <izz>4.07539e-08</izz>
+          </inertia>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://011_banana/google_16k/textured.obj</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://011_banana/banana.material</uri>
+              <name>banana</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
     </model>
   </world>
 </sdf>

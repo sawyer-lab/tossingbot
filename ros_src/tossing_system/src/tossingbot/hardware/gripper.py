@@ -59,6 +59,10 @@ class GripperInterface:
 
         # 3. Publish
         self._pub.publish(self._cmd)
+        
+    def is_grasping(self) -> bool:
+        
+        return False
 
 # ==============================================================================
 # MAIN TESTER

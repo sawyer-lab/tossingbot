@@ -10,18 +10,12 @@ class RotationPrimitive:
         return (idx % self.num_rotations) * self.angle_step
 
     def get_quaternion(self, idx):
-        # Get base angle (0, 45, 90...)
         angle_deg = self.get_angle(idx)
         
-        # --- THE OFFSET FIX ---
-        # If your gripper fingers are aligned with X, but 0-deg means aligned with Y,
-        # we add 90 degrees here.
-        # TRY THIS: Add +90 if your grasps are consistently perpendicular to the banana.
         corrected_angle = angle_deg 
         
         yaw = np.deg2rad(corrected_angle)
         
-        # Fixed Down Orientation params (Roll=180)
         roll = np.pi 
         pitch = 0.0
         

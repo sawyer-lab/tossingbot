@@ -75,7 +75,7 @@ class CasadiPlanner:
         for k in range(self.SOLVER_STEPS):
             opti.set_initial(Q[:, k], q_start)
             
-        opts = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'ipopt.max_iter': 500, 'print_time': 0}
+        opts = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'ipopt.max_iter': 500, 'print_time': 0, 'ipopt.max_cpu_time': 2.0}
         opti.solver('ipopt', opts)
         
         try:
@@ -153,7 +153,7 @@ class CasadiPlanner:
         q_target = ca.DM(target_quat)
         
         W_POS = 1000.0
-        W_ORI = 5000.0 # Reduced from previous/implied high values
+        W_ORI = 500.0 # Reduced from previous/implied high values
         W_REG = 0.5  # New Regularization Weight
 
         for k in range(self.SOLVER_STEPS):
@@ -184,3 +184,66 @@ class CasadiPlanner:
 
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)
+    
+    
+    def compute_inverse_kinematics(self, q_start, target_pos, target_quat=[0,1,0,0]):
+        """
+        Solves a static optimization problem to find the joint configuration that 
+        matches the target pose, using q_start as the initial guess.
+        """
+        opti = ca.Opti()
+        
+        # Variable: Single joint configuration (not a trajectory)
+        Q = opti.variable(self.model.n_dof)
+        
+        # Parameters
+        p_target = ca.DM(target_pos)
+        q_target = ca.DM(target_quat)
+        
+        # Forward Kinematics
+        pos_curr = self.model.fk_pos(Q)
+        rot_curr = self.model.fk_rot(Q)
+        
+        # Weights (Matching plan_cartesian logic)
+        W_POS = 1000.0
+        W_ORI = 5000.0
+        W_REG = 0.5   # Posture bias (keeps arm natural)
+        W_CLOSE = 0.1 # Slight bias to stay close to start config (prevents jumping)
+
+        total_cost = 0
+        
+        # 1. Position Error
+        err_pos = pos_curr - p_target
+        total_cost += W_POS * ca.dot(err_pos, err_pos)
+        
+        # 2. Orientation Error
+        dot_prod = ca.dot(rot_curr, q_target)
+        err_ori = 1.0 - (dot_prod * dot_prod)
+        total_cost += W_ORI * err_ori
+        
+        # 3. Regularization (Posture)
+        # Pulls towards Q_NATURAL to resolve redundancy (e.g., elbow up/down)
+        diff_natural = Q - self.Q_NATURAL
+        total_cost += W_REG * ca.dot(diff_natural, diff_natural)
+
+        # 4. Minimize displacement from start (optional, but good for stability)
+        diff_start = Q - ca.DM(q_start)
+        total_cost += W_CLOSE * ca.dot(diff_start, diff_start)
+
+        # Constraints: Joint Limits
+        opti.subject_to(opti.bounded(self.model.q_min, Q, self.model.q_max))
+        
+        opti.minimize(total_cost)
+        
+        # Solver Setup
+        opti.set_initial(Q, q_start) # Warm start with current config
+        opts = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'print_time': 0}
+        opti.solver('ipopt', opts)
+        
+        try:
+            sol = opti.solve()
+            return sol.value(Q).tolist()
+        except RuntimeError:
+            print("[IK] Solver failed to converge. Target might be out of reach.")
+            # Depending on strictness, you can return None or the failed optimization value
+            return opti.debug.value(Q).tolist()

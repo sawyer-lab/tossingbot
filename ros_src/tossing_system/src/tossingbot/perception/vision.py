@@ -31,48 +31,36 @@ class VisionProcessor:
         xyz = np.asarray(pcd.points)
         rgb = np.asarray(pcd.colors)
 
-        # --- EXPLICIT MAPPING ---
-        # 1. Map X (Forward/Back) -> Rows (u)
-        # X goes from min_x (Near) to max_x (Far)
-        # u goes from H (Bottom) to 0 (Top)
-        # Formula: u = (max_x - x) / (max_x - min_x) * H
         x_range = self.max_x - self.min_x
         u = ((self.max_x - xyz[:, 0]) / x_range * config.IMG_H).astype(int)
 
-        # 2. Map Y (Left/Right) -> Cols (v)
-        # Y goes from max_y (Left) to min_y (Right)
-        # v goes from 0 (Left) to W (Right)
-        # Formula: v = (max_y - y) / (max_y - min_y) * W
         y_range = self.max_y - self.min_y
         v = ((self.max_y - xyz[:, 1]) / y_range * config.IMG_W).astype(int)
-        
-        # Clip
+
         u = np.clip(u, 0, config.IMG_H - 1)
         v = np.clip(v, 0, config.IMG_W - 1)
 
-        tensor_map = np.zeros((config.IMG_H, config.IMG_W, 3), dtype=np.float32)
+        tensor_map = np.zeros((config.IMG_H, config.IMG_W, 4), dtype=np.float32)
         
-        # Z-Buffer Sort (Highest points on top)
         sort_idx = np.argsort(xyz[:, 2])
         u, v = u[sort_idx], v[sort_idx]
+        sorted_xyz = xyz[sort_idx]
+        sorted_rgb = rgb[sort_idx]
         
-        tensor_map[u, v] = rgb[sort_idx]
+        tensor_map[u, v, :3] = sorted_rgb
+        
+        height_vals = sorted_xyz[:, 2] - config.TABLE_HEIGHT
+        tensor_map[u, v, 3] = np.clip(height_vals, 0.0, 1.0) 
 
+        # Permute to (C, H, W) -> (4, H, W)
         return torch.from_numpy(tensor_map).permute(2, 0, 1)
 
     def pixel_to_world(self, u, v):
-        """
-        Inverse Mapping: Pixel (u,v) -> World (x,y)
-        """
-        # u is Row (0 at top, H at bottom)
-        # u=0 -> Max X
-        # u=H -> Min X
+
         pct_u = float(u) / config.IMG_H
         world_x = self.max_x - (pct_u * (self.max_x - self.min_x))
         
-        # v is Col (0 at left, W at right)
-        # v=0 -> Max Y
-        # v=W -> Min Y
+
         pct_v = float(v) / config.IMG_W
         world_y = self.max_y - (pct_v * (self.max_y - self.min_y))
 

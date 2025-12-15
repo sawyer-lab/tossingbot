@@ -1,5 +1,7 @@
 import numpy as np
 
+TABLE_HEIGHT = 0.75
+
 # --- WORKSPACE DEFINITIONS ---
 # Center of the table relative to robot base
 CENTER_X = 0.60 
