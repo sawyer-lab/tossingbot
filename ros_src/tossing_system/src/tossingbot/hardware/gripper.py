@@ -19,7 +19,7 @@ class GripperInterface:
         
         # Pre-allocate message skeleton
         self._cmd = IOComponentCommand()
-        self._cmd.op = 'set' # We are setting a value
+        self._cmd.op = 'set'
         
         rospy.loginfo("GripperInterface: Ready.")
 
@@ -42,8 +42,6 @@ class GripperInterface:
         Internal helper to format the Intera IO message.
         Structure matches intera_io/scripts/io_interface.py logic.
         """
-        # 1. Construct the Python Dictionary structure
-        # This mirrors how the official SDK builds 'SetCommand'
         cmd_struct = {
             "signals": {
                 "position_m": {
@@ -53,20 +51,20 @@ class GripperInterface:
             }
         }
 
-        # 2. Serialize to JSON and assign to 'args'
         self._cmd.time = rospy.Time.now()
         self._cmd.args = json.dumps(cmd_struct)
 
-        # 3. Publish
         self._pub.publish(self._cmd)
         
     def is_grasping(self) -> bool:
-        
+        # TODO: Implement feedback check if sensors are available
         return False
+    
+    def get_current_position(self) -> float:
+        # TODO: Implement feedback retrieval if sensors are available
+        return -1.0  # Unknown
 
-# ==============================================================================
-# MAIN TESTER
-# ==============================================================================
+
 if __name__ == "__main__":
     rospy.init_node("test_gripper_hardware")
     

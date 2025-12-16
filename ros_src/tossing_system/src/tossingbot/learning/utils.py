@@ -2,14 +2,34 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+# --- CONFIG PLACEHOLDERS (You will update these numbers later) ---
+# R, G, B, Height
+TEMP_MEAN = [0.485, 0.456, 0.406, 0.01] 
+TEMP_STD  = [0.229, 0.224, 0.225, 0.03]
+
+def normalize_tensor(image_tensor, device):
+    """
+    Normalizes a (C, H, W) tensor using (image - mean) / std.
+    """
+    # Create tensors for broadcasting (C, 1, 1)
+    mean = torch.tensor(TEMP_MEAN, device=device).view(-1, 1, 1)
+    std = torch.tensor(TEMP_STD, device=device).view(-1, 1, 1)
+    
+    # Epsilon (1e-6) prevents division by zero if std is 0
+    return (image_tensor - mean) / (std + 1e-6)
+
 # --- 1. Tensor Rotations ---
 def create_rotated_batch(image_tensor, num_rotations, device):
     """
-    Takes a single (C, H, W) tensor and returns a batch (N, C, H, W)
-    of rotated versions.
+    Takes a single (C, H, W) tensor, normalizes it, 
+    and returns a batch (N, C, H, W) of rotated versions.
     """
     image_tensor = image_tensor.to(device)
-    B, C, H, W = 1, image_tensor.shape[0], image_tensor.shape[1], image_tensor.shape[2]
+    
+    # --- STEP 1: NORMALIZE BEFORE ROTATING ---
+    norm_img = normalize_tensor(image_tensor, device)
+    
+    B, C, H, W = 1, norm_img.shape[0], norm_img.shape[1], norm_img.shape[2]
     
     rotated_list = []
     
@@ -17,8 +37,8 @@ def create_rotated_batch(image_tensor, num_rotations, device):
     
     for i in range(num_rotations):
         angle_deg = i * step
-        theta = -np.radians(angle_deg)
-        
+        # Negative because affine_grid rotates the sampling grid, effectively rotating image opposite
+        theta = -np.radians(angle_deg) 
 
         rot_mat = torch.tensor([
             [np.cos(theta), -np.sin(theta), 0],
@@ -26,7 +46,9 @@ def create_rotated_batch(image_tensor, num_rotations, device):
         ], dtype=torch.float32, device=device).unsqueeze(0) # (1, 2, 3)
 
         grid = F.affine_grid(rot_mat, torch.Size((1, C, H, W)), align_corners=True)
-        rot_img = F.grid_sample(image_tensor.unsqueeze(0), grid, align_corners=True)
+        
+        # Use the NORMALIZED image here
+        rot_img = F.grid_sample(norm_img.unsqueeze(0), grid, align_corners=True)
         
         rotated_list.append(rot_img.squeeze(0))
 
@@ -47,26 +69,20 @@ class RotationTransformer:
             
         B, C, H, W = state_tensor.shape
         
-        # PyTorch affine_grid expects Radians
-        # Negative angle because Y-axis is inverted in image coordinates usually, 
-        # or to match the "camera rotates vs object rotates" logic.
         theta = -np.radians(angle_deg)
         
-        # Affine Matrix [ cos -sin  0 ]
-        #               [ sin  cos  0 ]
         rot_mat = torch.tensor([
             [np.cos(theta), -np.sin(theta), 0],
             [np.sin(theta), np.cos(theta), 0]
         ], dtype=torch.float32, device=self.device).unsqueeze(0)
         
-        # If batch size > 1, repeat matrix
         if B > 1:
             rot_mat = rot_mat.repeat(B, 1, 1)
 
         grid = F.affine_grid(rot_mat, torch.Size((B, C, H, W)), align_corners=True)
         rot_img = F.grid_sample(state_tensor, grid, align_corners=True, mode='nearest')
         
-        return rot_img.squeeze(0) # Return (C, H, W)
+        return rot_img.squeeze(0) 
 
     def to_world_frame(self, state_tensor, angle_deg):
         """Inverse of to_gripper_frame."""
@@ -79,26 +95,18 @@ class RotationTransformer:
         """
         cx, cy = W / 2.0, H / 2.0
         
-        # If to_gripper (World -> Image), we rotate by -angle
-        # If to_world (Image -> World), we rotate by +angle
         factor = -1.0 if to_gripper_frame else 1.0
         rad = np.radians(angle_deg * factor)
         
-        # Translate to Center
         x = v - cx
         y = u - cy
         
-        # Rotation Matrix
-        # x' = x cos - y sin
-        # y' = x sin + y cos
         new_x = x * np.cos(rad) - y * np.sin(rad)
         new_y = x * np.sin(rad) + y * np.cos(rad)
         
-        # Translate back
         v_new = int(new_x + cx)
         u_new = int(new_y + cy)
         
-        # Clamp
         v_new = np.clip(v_new, 0, W-1)
         u_new = np.clip(u_new, 0, H-1)
         

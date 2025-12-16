@@ -9,6 +9,7 @@ class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ResidualBlock, self).__init__()
         
+        # Shortcut connection
         self.shortcut = nn.Sequential()
         if in_channels != out_channels:
             self.shortcut = nn.Sequential(
@@ -16,6 +17,7 @@ class ResidualBlock(nn.Module):
                 nn.BatchNorm2d(out_channels)
             )
 
+        # Main path
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
@@ -27,6 +29,7 @@ class ResidualBlock(nn.Module):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         
+        # Add shortcut
         out += residual
         out = F.relu(out)
         return out
@@ -73,10 +76,8 @@ class GraspingModule(nn.Module):
     def forward(self, mu, target_size):
         g = self.rb1(mu)
         g = self.rb2(g)
-        # Upsample 1
         g = F.interpolate(g, scale_factor=2, mode='bilinear', align_corners=True)
         g = self.rb3(g)
-        # Upsample 2 (Match original input size)
         g = F.interpolate(g, size=target_size, mode='bilinear', align_corners=True)
         logits = self.conv_final(g)
         
@@ -103,7 +104,7 @@ class TossingBot_Modular(nn.Module):
             # Weights: Random Kaiming Normal
             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             
-            # Biases: Random Uniform (instead of 0 or constant)
+            # Biases: Random Uniform
             if m.bias is not None:
                 nn.init.uniform_(m.bias, -0.1, 0.1)
                 

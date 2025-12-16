@@ -80,10 +80,9 @@ class SawyerInterface:
         Moves to target joint positions with a strict TIMEOUT.
         Prevents infinite loops if the robot cannot reach the exact tolerance.
         """
-        tolerance = 0.015 # Slightly relaxed tolerance
+        tolerance = 0.015 
         max_error = 100.0
         
-        # Create a command chunk (0.1 seconds worth of data)
         cmd = RobotCommand(position=target_joints)
         chunk = [cmd] * 10 
         
@@ -93,14 +92,10 @@ class SawyerInterface:
             # --- 1. TIMEOUT CHECK ---
             elapsed = (rospy.Time.now() - start_time).to_sec()
             if elapsed > timeout:
-                rospy.logwarn(f"⚠️ MOVE TIMEOUT: Aborting. Final Error: {max_error:.4f} rad")
-                break # <--- This breaks the infinite loop
+                rospy.logwarn(f"MOVE TIMEOUT: Aborting. Final Error: {max_error:.4f} rad")
+                break 
 
-            # --- 2. EXECUTE ---
-            # Send commands for 0.1s
             self.execute_stream(chunk, ControlMode.POSITION)
-            
-            # --- 3. FEEDBACK ---
             current = self.get_joint_positions()
             errors = [abs(c - t) for c, t in zip(current, target_joints)]
             max_error = max(errors)
@@ -145,19 +140,7 @@ class SawyerInterface:
 
         return True
     
-    def hold_position(self, duration: float):
-        """
-        Convenience method. Streams the CURRENT position for X seconds.
-        Useful for waiting/pausing while keeping the robot stiff.
-        """
-        steps = int(duration * self._control_rate)
-        current_pos = self.get_joint_positions()
-        
-        # Create a stream of identical commands
-        cmd = RobotCommand(position=current_pos)
-        stream = [cmd] * steps
-        
-        self.execute_stream(stream, ControlMode.POSITION)
+
 
 if __name__ == "__main__":
     """Simple Test Script for SawyerInterface

@@ -187,3 +187,8 @@ cython_debug/
 *.tiff
 *.svg
 *.webp  
+
+
+# Ignore pkl and pth files
+*.pkl
+*.pth
