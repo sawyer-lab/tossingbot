@@ -25,9 +25,7 @@ class TossingAgent:
         # Memory & Utils
         self.buffer = RankBasedReplayBuffer(capacity=cfg.BUFFER_CAPACITY)
         self.transformer = RotationTransformer(device=self.device)
-        
-        self.total_deg = 180
-        
+                
         self.load_snapshot()
 
     def get_action(self, state_tensor, epsilon=0.0, failed_attempts=[]):
@@ -45,7 +43,7 @@ class TossingAgent:
             H, W = masked_vol.shape[2:]
             
             for (f_rot, f_u, f_v) in failed_attempts:
-                rad = 10 # Inhibition radius
+                rad = 2 # Inhibition radius
                 masked_vol[0, f_rot, max(0, f_u-rad):min(H, f_u+rad), max(0, f_v-rad):min(W, f_v+rad)] = -1e9
 
             # Selection Strategy
@@ -77,10 +75,10 @@ class TossingAgent:
     def train(self):
         if len(self.buffer) < cfg.BATCH_SIZE: return 0.0
         
-        # --- NEW SAMPLING (No Weights) ---
+        # 1. Sample
         batch, indices = self.buffer.sample(cfg.BATCH_SIZE)
         
-        # Unpack batch
+        # Unpack...
         b_states = torch.stack([x[0] for x in batch]).to(self.device)
         b_u = [x[1] for x in batch]
         b_v = [x[2] for x in batch]
@@ -97,25 +95,32 @@ class TossingAgent:
         # Forward
         tensor_in = torch.stack(rotated_inputs)
         self.optimizer.zero_grad()
+        
+        # "logits" are raw scores (-inf to +inf)
         logits = self.model(tensor_in)
         
-        # Extract Q-value
-        pred_vals = []
+        # Extract specific pixel logits
+        pred_logits = []
         for i in range(cfg.BATCH_SIZE):
-            pred_vals.append(logits[i, 0, b_u[i], b_v[i]])
+            pred_logits.append(logits[i, 0, b_u[i], b_v[i]])
         
-        pred_vals = torch.stack(pred_vals).unsqueeze(1)
+        pred_logits = torch.stack(pred_logits).unsqueeze(1)
         
-        # --- NEW LOSS CALCULATION (No Weights) ---
-        # Before: loss = (self.loss_fn(...) * weights).mean()
-        # Now: Simple Mean
-        loss = self.loss_fn(pred_vals, b_rew).mean()
+        # 2. Compute Loss (BCEWithLogitsLoss prefers raw logits for stability)
+        loss = self.loss_fn(pred_logits, b_rew).mean()
         
         loss.backward()
         self.optimizer.step()
         
-        # Update Priorities
-        errors = torch.abs(pred_vals - b_rew).detach().cpu().numpy()
+        # 3. Update Priorities (CRITICAL FIX)
+        # We must convert Logits -> Probability (0..1) to compare with Reward (0 or 1)
+        with torch.no_grad():
+            pred_probs = torch.sigmoid(pred_logits) # Convert to 0.0 - 1.0
+            errors = torch.abs(pred_probs - b_rew).cpu().squeeze().numpy()
+        
+        # Handle scalar edge case
+        if errors.ndim == 0: errors = np.array([errors])
+            
         self.buffer.update_priorities(indices, errors)
         
         return loss.item()
@@ -129,7 +134,7 @@ class TossingAgent:
         padded = TF.pad(state_tensor, [pad]*4, fill=0)
         
         for i in range(cfg.NUM_ROTATIONS):
-            angle = -(self.total_deg / cfg.NUM_ROTATIONS) * i
+            angle = -(cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
             rot = TF.rotate(padded, angle)
             crop = TF.center_crop(rot, [h, w])
             batch_rotated.append(crop)

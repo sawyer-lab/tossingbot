@@ -37,7 +37,6 @@ def main():
     env = TossingEnv()
     agent = TossingAgent()
     transformer = RotationTransformer() 
-    total_deg = 180 
     cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Dashboard", 1400, 900)
     
@@ -62,7 +61,7 @@ def main():
         
         # --- B. TRANSFORM (Pixel Frame -> World Frame) ---
         # The angle this rotation represents (negative because we rotated image opposite)
-        angle_deg = (total_deg / cfg.NUM_ROTATIONS) * rot_idx
+        angle_deg = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
         
         u_world, v_world = transformer.rotate_pixel(
             u_rot, v_rot, angle_deg, cfg.IMG_H, cfg.IMG_W, to_gripper_frame=False

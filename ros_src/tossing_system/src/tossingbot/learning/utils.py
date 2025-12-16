@@ -2,6 +2,9 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+from tossingbot import config as cfg
+
+
 # --- CONFIG PLACEHOLDERS (You will update these numbers later) ---
 # R, G, B, Height
 TEMP_MEAN = [0.485, 0.456, 0.406, 0.01] 
@@ -33,7 +36,7 @@ def create_rotated_batch(image_tensor, num_rotations, device):
     
     rotated_list = []
     
-    step = 180.0 / num_rotations
+    step = cfg.TOTAL_DEG / cfg.NUM_ROTATIONS
     
     for i in range(num_rotations):
         angle_deg = i * step

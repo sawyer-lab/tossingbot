@@ -2,9 +2,10 @@ import numpy as np
 from geometry_msgs.msg import Quaternion
 
 class RotationPrimitive:
-    def __init__(self, num_rotations=4):
+    def __init__(self, num_rotations=4, total_deg = 180):
         self.num_rotations = num_rotations
-        self.angle_step = 180.0 / num_rotations
+        self.total_deg = total_deg
+        self.angle_step = total_deg / num_rotations
 
     def get_angle(self, idx):
         return (idx % self.num_rotations) * self.angle_step

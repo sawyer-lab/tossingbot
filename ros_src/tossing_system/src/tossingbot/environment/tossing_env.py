@@ -96,7 +96,7 @@ class SimInterface:
             try:
                 resp = self.get_state_srv(obj, "world")
                 # Check if lifted significantly above the table (0.75 + 0.15)
-                if resp.pose.position.z > cfg.TABLE_HEIGHT + 0.15:
+                if resp.pose.position.z > cfg.TABLE_HEIGHT + 0.8:
                     return True
             except: pass
         return False
@@ -117,7 +117,7 @@ class TossingEnv:
         urdf_path = rp.get_path('grasping') + "/sawyer_model.urdf"
         self.kinematics = CasadiKinematics(urdf_path, "base", "right_gripper_tip")
         self.planner = CasadiPlanner(self.kinematics) # Config injected automatically
-        self.rot_helper = RotationPrimitive(num_rotations=cfg.NUM_ROTATIONS)
+        self.rot_helper = RotationPrimitive(num_rotations=cfg.NUM_ROTATIONS, total_deg=cfg.TOTAL_DEG)
 
         # State Tracking
         self.max_steps = 50
@@ -194,7 +194,19 @@ class TossingEnv:
         path_up = self.planner.plan_cartesian(self.robot.get_joint_positions(), hover_pos, target_quat, duration=1.5)
         self._execute_trajectory(path_up)
 
-        return 1.0 if self.sim.check_success() else 0.0
+        grasp_width = self.gripper.get_current_position()
+        is_holding = self.gripper.is_grasping()
+        
+        # Reward Logic:
+        # If we are holding something (Width > 0.002 and Width < Open), SUCCESS.
+        if is_holding:
+            reward = 1.0
+            print(f"✅ GRASP SUCCESS! (Width: {grasp_width:.4f}m)")
+        else:
+            reward = 0.0
+            print(f"❌ GRASP FAILED (Width: {grasp_width:.4f}m)")
+
+        return reward
 
     def _execute_trajectory(self, plan_data):
         if plan_data is None: return False
