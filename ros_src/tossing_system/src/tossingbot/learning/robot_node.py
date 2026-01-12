@@ -47,7 +47,7 @@ class TossingNode:
         
         # 1. SETUP HARDWARE
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        rospy.loginfo(f"🟢 BRAIN INITIALIZED ON: {self.device}")
+        rospy.loginfo(f"BRAIN INITIALIZED ON: {self.device}")
         
         # 2. INIT COMPONENTS
         self.env = RotationalEnv(num_rotations=NUM_ROTATIONS)
@@ -83,7 +83,7 @@ class TossingNode:
         return EXPLORE_START - fraction * (EXPLORE_START - EXPLORE_END)
 
     def run(self):
-        rospy.loginfo("🚀 STARTING SELF-SUPERVISED LOOP...")
+        rospy.loginfo("STARTING SELF-SUPERVISED LOOP...")
         
         self.env.force_neutral()
         state_tensor = self.env.reset_episode(first_run=True)
@@ -107,7 +107,7 @@ class TossingNode:
             
             if random.random() < epsilon:
                 # Explore
-                action_type = "🎲 RND"
+                action_type = "RND"
                 rot_idx = random.randint(0, NUM_ROTATIONS - 1)
                 margin = 15
                 u_rot = random.randint(margin, H - margin - 1) 
@@ -115,7 +115,7 @@ class TossingNode:
                 conf = 0.0
             else:
                 # Exploit
-                action_type = "🧠 NET"
+                action_type = "NET"
                 # Argmax over (Rot, H, W) volume
                 flat_idx = torch.argmax(full_vol).item()
                 rot_idx = flat_idx // (H * W)
@@ -142,7 +142,7 @@ class TossingNode:
             
             reward = self.env.step(u_world, v_world, rot_idx)
             
-            msg = "✅ SUCCESS" if reward > 0.5 else "❌ FAIL"
+            msg = "SUCCESS" if reward > 0.5 else "FAIL"
             print(f"   >>> Result: {msg} (Rew: {reward})")
 
             # --- 5. STORE ---
@@ -313,12 +313,12 @@ class TossingNode:
         try:
             with open(self.weights_path.replace(".pth", "_buffer.pkl"), 'wb') as f:
                 pickle.dump(self.buffer, f)
-            rospy.loginfo(f"💾 SAVED SNAPSHOT: Step {self.step_count}")
+            rospy.loginfo(f"SAVED SNAPSHOT: Step {self.step_count}")
         except: pass
 
     def load_snapshot(self):
         if os.path.exists(self.weights_path):
-            rospy.loginfo(f"🔄 LOADING: {self.weights_path}")
+            rospy.loginfo(f"LOADING: {self.weights_path}")
             try:
                 ckpt = torch.load(self.weights_path, map_location=self.device)
                 self.model.load_state_dict(ckpt['model_state'])

@@ -42,7 +42,7 @@ MOMENTUM = 0.9
 WEIGHT_DECAY = 2e-5
 BATCH_SIZE = 16
 BUFFER_CAPACITY = 2000
-NUM_ROTATIONS = 1    
+NUM_ROTATIONS = 4    # Enable 4 rotations: 0°, 45°, 90°, 135°    
 
 # Exploration Strategy
 EXPLORE_START = 0.5   

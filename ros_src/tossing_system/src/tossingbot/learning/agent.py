@@ -88,7 +88,7 @@ class TossingAgent:
         # Rotate images...
         rotated_inputs = []
         for i in range(cfg.BATCH_SIZE):
-            angle = -(360 / cfg.NUM_ROTATIONS) * b_rot[i]
+            angle = -(cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * b_rot[i]
             rot_img = self.transformer.to_gripper_frame(b_states[i], angle)
             rotated_inputs.append(rot_img)
         

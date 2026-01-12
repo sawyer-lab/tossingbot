@@ -46,7 +46,7 @@ def main():
     
     step_count = 0
     
-    rospy.loginfo("🚀 STARTING MAIN LOOP...")
+    rospy.loginfo("STARTING MAIN LOOP...")
 
     # 3. Loop
     while not rospy.is_shutdown():
@@ -89,7 +89,7 @@ def main():
 
         # --- G. RESULT ---
         success = (reward > 0.5)
-        msg = "✅ SUCCESS" if success else "❌ FAIL"
+        msg = "SUCCESS" if success else "FAIL"
         print(f"   >>> Result: {msg} (Rew: {reward}) | Loss: {loss:.4f}")
 
         if success:

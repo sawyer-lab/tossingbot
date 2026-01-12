@@ -110,7 +110,7 @@ class SimInterface:
             try:
                 resp = self.get_state_srv(obj_name, "world")
                 if resp.pose.position.z > 0.90:
-                    rospy.loginfo(f"🍌 SUCCESS: Lifted {obj_name}!")
+                    rospy.loginfo(f"SUCCESS: Lifted {obj_name}!")
                     return True
             except rospy.ServiceException: pass
         return False
@@ -179,19 +179,19 @@ class RotationalEnv:
         is_new_scene = False
 
         if first_run:
-            rospy.loginfo("🆕 INITIALIZING FIRST EPISODE...")
+            rospy.loginfo("INITIALIZING FIRST EPISODE...")
             self.sim.spawn_new_problem()
             self.current_steps = 0
             is_new_scene = True
             
         elif previous_success:
-            rospy.loginfo("✅ GRASP SUCCESS! Generating NEW Problem.")
+            rospy.loginfo("GRASP SUCCESS! Generating NEW Problem.")
             self.sim.spawn_new_problem()
             self.current_steps = 0
             is_new_scene = True
             
         elif self.current_steps >= self.max_steps:
-            rospy.loginfo(f"⚠️ MAX STEPS ({self.max_steps}) REACHED. Generating NEW Problem.")
+            rospy.loginfo(f"MAX STEPS ({self.max_steps}) REACHED. Generating NEW Problem.")
             self.sim.spawn_new_problem()
             self.current_steps = 0
             is_new_scene = True
@@ -298,7 +298,7 @@ class TossingNode:
         return masked_vol
 
     def run(self):
-        rospy.loginfo("🚀 STARTING SELF-SUPERVISED LOOP...")
+        rospy.loginfo("STARTING SELF-SUPERVISED LOOP...")
         self.env.force_neutral()
         
         # Initial Reset
@@ -324,14 +324,14 @@ class TossingNode:
             H, W = full_vol.shape[2:] # B, C, H, W
             
             if random.random() < epsilon:
-                action_type = "🎲 RND"
+                action_type = "RND"
                 rot_idx = random.randint(0, NUM_ROTATIONS - 1)
                 margin = 15
                 u_rot = random.randint(margin, H - margin - 1) 
                 v_rot = random.randint(margin, W - margin - 1)
                 conf = 0.0
             else:
-                action_type = "🧠 NET"
+                action_type = "NET"
                 # Argmax on MASKED volume
                 flat_idx = torch.argmax(masked_vol).item()
                 rot_idx = flat_idx // (H * W)
@@ -353,11 +353,11 @@ class TossingNode:
             print("-" * 50)
             print(f"[STEP {self.step_count}] Mode: {action_type} (Eps: {epsilon:.2f})")
             print(f"   >>> Rot: {rot_idx} ({angle_deg:.1f}°) | Pixel: ({u_rot}, {v_rot})")
-            if action_type == "🧠 NET" and len(self.failed_attempts_in_scene) > 0:
+            if action_type == "NET" and len(self.failed_attempts_in_scene) > 0:
                 print(f"   >>> (Inhibiting {len(self.failed_attempts_in_scene)} previous failures)")
 
             reward = self.env.step(u_world, v_world, rot_idx)
-            msg = "✅ SUCCESS" if reward > 0.5 else "❌ FAIL"
+            msg = "SUCCESS" if reward > 0.5 else "FAIL"
             print(f"   >>> Result: {msg} (Rew: {reward})")
 
             # --- 6. STORE & TRAIN ---
@@ -498,7 +498,7 @@ class TossingNode:
         torch.save(checkpoint, self.weights_path)
         try:
             with open(self.weights_path.replace(".pth", "_buffer.pkl"), 'wb') as f: pickle.dump(self.buffer, f)
-            rospy.loginfo(f"💾 SAVED SNAPSHOT: Step {self.step_count}")
+            rospy.loginfo(f"SAVED SNAPSHOT: Step {self.step_count}")
         except: pass
 
     def load_snapshot(self):
