@@ -3,6 +3,8 @@ import casadi as ca
 import numpy as np
 import rospy
 from scipy.interpolate import interp1d
+from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Slerp
 from tossingbot.planning.kinematics import CasadiKinematics
 from tossingbot.planning.planner_config import PlannerConfig
 
@@ -14,6 +16,37 @@ class CasadiPlanner:
         
         # Pre-convert Q_NATURAL to CasADi DM for efficiency
         self.Q_NATURAL = ca.DM(self.cfg.q_natural)
+    
+    def _slerp_quaternions(self, q_start, q_target, steps):
+        """
+        Spherical linear interpolation between two quaternions.
+        Args:
+            q_start: Starting quaternion [x, y, z, w] (numpy array or list)
+            q_target: Target quaternion [x, y, z, w] (numpy array or list)
+            steps: Number of interpolation steps
+        Returns:
+            List of interpolated quaternions as CasADi DM objects
+        """
+        # Convert to [x, y, z, w] format for scipy
+        q_start_np = np.array(q_start)
+        q_target_np = np.array(q_target)
+        
+        # Create Rotation objects (scipy uses [x, y, z, w] internally)
+        rot_start = R.from_quat(q_start_np)
+        rot_target = R.from_quat(q_target_np)
+        
+        # Create SLERP interpolator
+        key_times = [0, 1]
+        key_rots = R.from_quat([q_start_np, q_target_np])
+        slerp = Slerp(key_times, key_rots)
+        
+        # Generate interpolated quaternions
+        alphas = np.linspace(0, 1, steps)
+        interpolated_rots = slerp(alphas)
+        interpolated_quats = interpolated_rots.as_quat()  # Returns [x, y, z, w] format
+        
+        # Convert to list of CasADi DM objects
+        return [ca.DM(q) for q in interpolated_quats]
 
     def _setup_problem(self, duration, q_start, check_floor):
         """
@@ -78,9 +111,11 @@ class CasadiPlanner:
         opts = {
             'ipopt.print_level': 0, 
             'ipopt.sb': 'yes', 
-            'ipopt.max_iter': 500, 
+            'ipopt.max_iter': 1000,  # Increased from 500
             'print_time': 0, 
-            'ipopt.max_cpu_time': 2.0
+            'ipopt.max_cpu_time': 5.0,  # Increased from 2.0
+            'ipopt.tol': 1e-6,  # Tighter tolerance
+            'ipopt.acceptable_tol': 1e-5  # Acceptable solution tolerance
         }
         opti.solver('ipopt', opts)
         
@@ -179,15 +214,31 @@ class CasadiPlanner:
             
             total_cost += self.cfg.w_pos * ca.dot(err_pos, err_pos)
             
-            # Orientation Error (Dot product maximization)
+            # Orientation Error - just track target at every step (no SLERP)
             dot_prod = ca.dot(rot_k, q_target)
             err_ori = 1.0 - (dot_prod * dot_prod)
             total_cost += self.cfg.w_ori * err_ori
 
-            # Posture Regularization (Fixes "Snaking")
-            # Pulls non-essential joints towards a natural home pose
+            # Posture Regularization
             q_diff = Q[:, k] - self.Q_NATURAL
             total_cost += self.cfg.w_reg * ca.dot(q_diff, q_diff)
+
+        # Final step: Strong constraint to ensure we actually reach the target
+        pos_final = self.model.fk_pos(Q[:, -1])
+        rot_final = self.model.fk_rot(Q[:, -1])
+        
+        err_pos_final = pos_final - ca.DM(target_pos)
+        total_cost += self.cfg.w_goal * ca.dot(err_pos_final, err_pos_final)
+        
+        dot_prod_final = ca.dot(rot_final, q_target)
+        
+        # HARD CONSTRAINT: Final orientation must be very close to target
+        # Force dot product^2 >= 0.98 (about 11.5° max error)
+        opti.subject_to(dot_prod_final * dot_prod_final >= 0.98)
+        
+        # Very strong cost to encourage perfect match
+        err_ori_final = 1.0 - (dot_prod_final * dot_prod_final)
+        total_cost += self.cfg.w_goal * 20.0 * err_ori_final
 
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)

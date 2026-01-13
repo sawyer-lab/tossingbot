@@ -25,6 +25,11 @@ from tossingbot.environment.tossing_env import TossingEnv
 from tossingbot.learning.agent import TossingAgent
 from tossingbot.learning.utils import RotationTransformer
 
+# =============================================================================
+# DEBUG MODE: Set to False for normal training/execution
+# =============================================================================
+DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
+
 def get_epsilon(step):
     if step >= cfg.EXPLORE_STEPS: return cfg.EXPLORE_END
     frac = float(step) / cfg.EXPLORE_STEPS
@@ -57,16 +62,16 @@ def main():
         # --- A. THINK ---
         eps = get_epsilon(step_count)
         # agent returns the specific rotation index and the pixel IN THAT ROTATED FRAME
-        rot_idx, u_rot, v_rot, debug = agent.get_action(obs, eps, failed_attempts)
+        # In DEBUG_MODE, disable failed_attempts inhibition to test all rotations
+        fail_list = [] if DEBUG_MODE else failed_attempts
+        rot_idx, u_rot, v_rot, debug = agent.get_action(obs, eps, failed_attempts=fail_list)
         
         # --- B. TRANSFORM (Pixel Frame -> World Frame) ---
-        # The angle this rotation represents
-        angle_deg = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
+        # Image was rotated by -(TOTAL_DEG/NUM_ROTATIONS)*rot_idx
+        # To map coordinates back, we rotate by the SAME angle (not opposite!)
+        # This is because after center crop, we're in the same coordinate space
+        angle_deg = -(cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
         
-        # TODO: ROTATION TRANSFORM ISSUE
-        # The coordinate transformation doesn't perfectly match TF.rotate()
-        # This causes selected points in rotated image to map incorrectly to world coordinates
-        # For now, using to_gripper_frame=False (may have 1-2 pixel error)
         u_world, v_world = transformer.rotate_pixel(
             u_rot, v_rot, angle_deg, cfg.IMG_H, cfg.IMG_W, to_gripper_frame=False
         )
@@ -75,12 +80,28 @@ def main():
         # We pass everything needed to draw the full "Thought Process"
         viz_img = render_dashboard(obs, debug, rot_idx, u_rot, v_rot, u_world, v_world, angle_deg, failed_attempts)
         cv2.imshow("Dashboard", viz_img)
-        cv2.waitKey(1) # Force draw
+        
+        # DEBUG_MODE: Wait for user confirmation before executing
+        if DEBUG_MODE:
+            print(f"\n{'='*70}")
+            print(f"[Step {step_count}] {debug['type']} (Eps: {eps:.2f})")
+            print(f"  Rotation: {rot_idx} → Image rotated by {angle_deg:.1f}°")
+            print(f"  Selected in ROTATED image: (u={u_rot}, v={v_rot})")
+            print(f"  Transformed to WORLD image: (u={u_world}, v={v_world})")
+            print(f"  (Should align visually: GREEN crosshair = CYAN crosshair location)")
+            print(f"{'='*70}")
+            print("Press ENTER to execute grasp (or 'q' to quit)...")
+            
+            key = cv2.waitKey(0)
+            if key == ord('q'):
+                break
+        else:
+            # Normal mode: just brief waitKey for cv2.imshow to update
+            cv2.waitKey(1)
 
         # --- D. ACT ---
-        print(f"\n[Step {step_count}] {debug['type']} (Eps: {eps:.2f})")
-        print(f"   >>> Rot: {rot_idx} ({angle_deg:.1f}°) | Pixel: ({u_rot}, {v_rot}) -> World: ({u_world}, {v_world})")
-        
+        action_type = "EXPLORE" if eps > random.random() else "EXPLOIT"
+        print(f"\n[Step {step_count:05d}] {action_type} | Rot={rot_idx} | Pixel=({u_world},{v_world}) | Eps={eps:.3f}")
         reward = env.step(u_world, v_world, rot_idx)
         
         # --- E. LEARN ---
@@ -93,8 +114,8 @@ def main():
 
         # --- G. RESULT ---
         success = (reward > 0.5)
-        msg = "SUCCESS" if success else "FAIL"
-        print(f"   >>> Result: {msg} (Rew: {reward}) | Loss: {loss:.4f}")
+        status = "✓ SUCCESS" if success else "✗ FAIL"
+        print(f"   Result: {status} | Reward={reward:.1f} | Loss={loss:.4f}\n")
 
         if success:
             failed_attempts = []
@@ -109,7 +130,7 @@ def main():
 
 def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_world, angle_deg, failures):
     """
-    Stitches a comprehensive dashboard:
+    Stitches a comprehensive dashboard with detailed visual debugging
     [ Rot 0 ] [ Rot 1 ] [ Rot 2 ] [ Rot 3 ]
     [      ORIGINAL WORLD FRAME VIEW      ]
     """
@@ -133,24 +154,23 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         # Combine (Input + Heatmap) side-by-side
         pair = np.hstack([in_img, heatmap_color])
         
-        # --- Annotations ---
-        # 1. Draw 'X' for past failures on this rotation
-        for (f_rot, f_u, f_v) in failures:
-            if f_rot == i:
-                # Offset X because pair is [Input | Heatmap]
-                # Draw on Input
-                cv2.drawMarker(pair, (f_v, f_u), (0,0,255), cv2.MARKER_CROSS, 15, 2)
-                # Draw on Heatmap (shift x by width of input)
-                cv2.drawMarker(pair, (f_v + in_img.shape[1], f_u), (0,0,255), cv2.MARKER_CROSS, 15, 2)
-
         # 2. Highlight the CHOSEN rotation
         if i == chosen_rot:
             # Green Border
-            cv2.rectangle(pair, (0,0), (pair.shape[1]-1, pair.shape[0]-1), (0, 255, 0), 4)
-            # Target Dot on Input
-            cv2.circle(pair, (v_rot, u_rot), 5, (0, 255, 0), -1)
-            # Target Dot on Heatmap
-            cv2.circle(pair, (v_rot + in_img.shape[1], u_rot), 5, (0, 255, 0), -1)
+            cv2.rectangle(pair, (0,0), (pair.shape[1]-1, pair.shape[0]-1), (0, 255, 0), 3)
+            
+            # FINER CROSSHAIR on Input (selected point)
+            # Draw thin crosshair lines
+            cv2.line(pair, (v_rot-10, u_rot), (v_rot+10, u_rot), (0, 255, 0), 1)
+            cv2.line(pair, (v_rot, u_rot-10), (v_rot, u_rot+10), (0, 255, 0), 1)
+            # Center dot
+            cv2.circle(pair, (v_rot, u_rot), 2, (0, 255, 0), -1)
+            
+            # Same on Heatmap (shift x by width of input)
+            offset = in_img.shape[1]
+            cv2.line(pair, (v_rot+offset-10, u_rot), (v_rot+offset+10, u_rot), (0, 255, 0), 1)
+            cv2.line(pair, (v_rot+offset, u_rot-10), (v_rot+offset, u_rot+10), (0, 255, 0), 1)
+            cv2.circle(pair, (v_rot + offset, u_rot), 2, (0, 255, 0), -1)
 
         row_images.append(pair)
 
@@ -169,21 +189,23 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
     u_world_sc = int(u_world * scale)
     v_world_sc = int(v_world * scale)
     
-    # Draw Grasp Arrow (Position + Orientation)
-    # Convert angle to radians (negative because image y is down)
+    # FINER CROSSHAIR for world position
+    cv2.line(world_img_resized, (v_world_sc-20, u_world_sc), (v_world_sc+20, u_world_sc), (0, 255, 255), 2)
+    cv2.line(world_img_resized, (v_world_sc, u_world_sc-20), (v_world_sc, u_world_sc+20), (0, 255, 255), 2)
+    cv2.circle(world_img_resized, (v_world_sc, u_world_sc), 3, (0, 255, 255), -1)
+    
+    # Draw Orientation Arrow
     rad = np.deg2rad(-angle_deg) 
-    arrow_len = 40 * scale
+    arrow_len = 50 * scale
     end_v = int(v_world_sc + arrow_len * np.cos(rad))
     end_u = int(u_world_sc + arrow_len * np.sin(rad))
+    cv2.arrowedLine(world_img_resized, (v_world_sc, u_world_sc), (end_v, end_u), (255, 0, 255), 2, tipLength=0.3)
     
-    # Draw Point
-    cv2.circle(world_img_resized, (v_world_sc, u_world_sc), 8, (0, 255, 0), -1)
-    # Draw Orientation
-    cv2.arrowedLine(world_img_resized, (v_world_sc, u_world_sc), (end_v, end_u), (0, 0, 255), 3)
-    
-    # Text
-    # cv2.putText(world_img_resized, f"CHOSEN: Rot {chosen_rot} ({angle_deg:.0f} deg) @ World({u_world}, {v_world})", 
-    #             (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+    # Add text labels
+    cv2.putText(world_img_resized, f"Rot{chosen_rot} ({angle_deg:.0f}deg) @ ({u_world},{v_world})", 
+                (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(world_img_resized, f"CYAN=Target, MAGENTA=Orientation", 
+                (20, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
     # --- 3. COMBINE ---
     final_dashboard = np.vstack([top_row, world_img_resized])

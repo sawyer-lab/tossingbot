@@ -5,7 +5,7 @@ from tossingbot import config as cfg  # <--- IMPORT THE TRUTH
 @dataclass
 class PlannerConfig:
     table_height: float = cfg.TABLE_HEIGHT
-    solver_steps: int = 20
+    solver_steps: int = 40  # Increased from 20 for better resolution
     
     # Weights
     w_smooth: float = 0.01     
@@ -13,8 +13,8 @@ class PlannerConfig:
     w_track: float  = 10.0     
     w_goal: float   = 1000.0   
     w_pos: float    = 10000.0   
-    w_ori: float    = 2000.0
-    w_reg: float    = 0.5      
+    w_ori: float    = 10000.0
+    w_reg: float    = 0.001    # Reduced further to minimize interference
     q_natural: np.ndarray = field(default_factory=lambda: np.array(cfg.NEUTRAL_JOINT_POS))
 
     # Robot Limits

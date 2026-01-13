@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.8
 import rospy
 import numpy as np
-from intera_core_msgs.msg import JointCommand
+from intera_core_msgs.msg import JointCommand, EndpointState
 from sensor_msgs.msg import JointState
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
@@ -35,6 +35,8 @@ class SawyerInterface:
         # State Management
         self._curr_joints = {}
         self._received_state = False
+        self._endpoint_pose = None
+        self._received_endpoint = False
 
         # Publisher (High Priority TCP)
         self._pub_joint_cmd = rospy.Publisher(
@@ -56,6 +58,15 @@ class SawyerInterface:
             queue_size=1,
             tcp_nodelay=True
         )
+        
+        # Subscriber (Endpoint State)
+        rospy.Subscriber(
+            self._ns + 'endpoint_state',
+            EndpointState,
+            self._cb_endpoint_state,
+            queue_size=1,
+            tcp_nodelay=True
+        )
 
         # Block until Hardware is Ready
         rospy.loginfo("SawyerInterface: Waiting for robot state...")
@@ -68,7 +79,24 @@ class SawyerInterface:
             temp = dict(zip(msg.name, msg.position))
             self._curr_joints = {n: temp[n] for n in self._joint_names}
             self._received_state = True
+    
+    def _cb_endpoint_state(self, msg: EndpointState):
+        """Callback for endpoint state - stores current pose"""
+        self._endpoint_pose = {
+            'position': [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z],
+            'orientation': [msg.pose.orientation.x, msg.pose.orientation.y, 
+                          msg.pose.orientation.z, msg.pose.orientation.w]
+        }
+        self._received_endpoint = True
 
+    def get_endpoint_pose(self) -> Optional[Dict]:
+        """
+        Returns the current end-effector pose.
+        Returns:
+            dict with 'position': [x, y, z], 'orientation': [x, y, z, w]
+            or None if not yet received
+        """
+        return self._endpoint_pose if self._received_endpoint else None
     
     def get_joint_positions(self) -> List[float]:
         """Returns [q0, q1, ... q6] in the correct order."""

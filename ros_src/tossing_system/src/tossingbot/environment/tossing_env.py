@@ -212,7 +212,7 @@ class TossingEnv:
         # 2. Get Orientation
         quat_msg = self.rot_helper.get_quaternion(rot_idx)
         target_quat = [quat_msg.x, quat_msg.y, quat_msg.z, quat_msg.w]
-
+        
         # 3. Define Waypoints
         hover_pos = target_pos.copy()
         hover_pos[2] += cfg.SAFE_LIFT_HEIGHT
