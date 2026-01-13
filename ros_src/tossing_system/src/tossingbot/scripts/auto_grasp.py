@@ -60,9 +60,13 @@ def main():
         rot_idx, u_rot, v_rot, debug = agent.get_action(obs, eps, failed_attempts)
         
         # --- B. TRANSFORM (Pixel Frame -> World Frame) ---
-        # The angle this rotation represents (negative because we rotated image opposite)
+        # The angle this rotation represents
         angle_deg = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
         
+        # TODO: ROTATION TRANSFORM ISSUE
+        # The coordinate transformation doesn't perfectly match TF.rotate()
+        # This causes selected points in rotated image to map incorrectly to world coordinates
+        # For now, using to_gripper_frame=False (may have 1-2 pixel error)
         u_world, v_world = transformer.rotate_pixel(
             u_rot, v_rot, angle_deg, cfg.IMG_H, cfg.IMG_W, to_gripper_frame=False
         )
