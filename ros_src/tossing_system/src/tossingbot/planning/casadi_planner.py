@@ -232,9 +232,13 @@ class CasadiPlanner:
         
         dot_prod_final = ca.dot(rot_final, q_target)
         
-        # HARD CONSTRAINT: Final orientation must be very close to target
-        # Force dot product^2 >= 0.98 (about 11.5° max error)
-        opti.subject_to(dot_prod_final * dot_prod_final >= 0.98)
+        # HARD CONSTRAINT: Final position must be within 1cm
+        opti.subject_to(ca.sumsqr(pos_final - ca.DM(target_pos)) <= 0.01**2)
+
+        # HARD CONSTRAINT: Final orientation must be reasonably close
+        # Relaxed from 0.95 to 0.90 (~26 deg) to prevent solver crashes (NaN)
+        # We rely on the high w_goal cost to pull it tighter than this.
+        opti.subject_to(dot_prod_final * dot_prod_final >= 0.90)
         
         # Very strong cost to encourage perfect match
         err_ori_final = 1.0 - (dot_prod_final * dot_prod_final)

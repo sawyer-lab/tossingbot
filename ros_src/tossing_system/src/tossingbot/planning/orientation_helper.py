@@ -1,6 +1,8 @@
 import numpy as np
 from geometry_msgs.msg import Quaternion
 
+from scipy.spatial.transform import Rotation as R
+
 class RotationPrimitive:
     def __init__(self, num_rotations=4, total_deg = 180):
         self.num_rotations = num_rotations
@@ -12,23 +14,15 @@ class RotationPrimitive:
 
     def get_quaternion(self, idx):
         angle_deg = self.get_angle(idx)
+        yaw = np.deg2rad(angle_deg)
         
-        corrected_angle = angle_deg 
-        
-        yaw = np.deg2rad(corrected_angle)
-        
-        roll = np.pi 
-        pitch = 0.0
-        
-        cy = np.cos(yaw * 0.5); sy = np.sin(yaw * 0.5)
-        cp = np.cos(pitch * 0.5); sp = np.sin(pitch * 0.5)
-        cr = np.cos(roll * 0.5); sr = np.sin(roll * 0.5)
+        # Sawyer Gripper: Roll=pi (facing down), Pitch=0, Yaw=target
+        # Using 'zyx' intrinsic rotation
+        rot = R.from_euler('zyx', [yaw, 0.0, np.pi])
+        quat = rot.as_quat() # Returns [x, y, z, w]
 
         q = Quaternion()
-        q.w = cr * cp * cy + sr * sp * sy
-        q.x = sr * cp * cy - cr * sp * sy
-        q.y = cr * sp * cy + sr * cp * sy
-        q.z = cr * cp * sy - sr * sp * cy
+        q.x, q.y, q.z, q.w = quat
         return q
 
     @staticmethod

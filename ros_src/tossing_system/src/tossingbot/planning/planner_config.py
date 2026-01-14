@@ -11,9 +11,9 @@ class PlannerConfig:
     w_smooth: float = 0.01     
     w_slack: float  = 10000.0  
     w_track: float  = 10.0     
-    w_goal: float   = 1000.0   
-    w_pos: float    = 10000.0   
-    w_ori: float    = 10000.0
+    w_goal: float   = 10000.0  # Increased to prioritize final accuracy
+    w_pos: float    = 100.0    # Decreased to allow deviation from straight line
+    w_ori: float    = 100.0    # Decreased to allow deviation from straight line
     w_reg: float    = 0.001    # Reduced further to minimize interference
     q_natural: np.ndarray = field(default_factory=lambda: np.array(cfg.NEUTRAL_JOINT_POS))
 
