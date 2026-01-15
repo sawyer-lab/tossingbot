@@ -85,11 +85,12 @@ class TossingAgent:
         b_rot = [x[3] for x in batch]
         b_rew = torch.tensor([x[4] for x in batch], dtype=torch.float32).to(self.device).unsqueeze(1)
 
-        # Rotate images...
+        # Rotate images using the new unified method...
         rotated_inputs = []
         for i in range(cfg.BATCH_SIZE):
             angle = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * b_rot[i]
-            rot_img = self.transformer.to_gripper_frame(b_states[i], angle)
+            # Use the new, centralized and robust rotation function
+            rot_img = self.transformer.rotate_single_with_padding(b_states[i], angle)
             rotated_inputs.append(rot_img)
         
         # Forward
@@ -126,20 +127,14 @@ class TossingAgent:
         return loss.item()
 
     def _forward_multi_view(self, state_tensor):
-        # Rotate input 4 times, stack, feed to network
+        # Use the new, unified rotation method from our transformer
         batch_rotated = []
-        c, h, w = state_tensor.shape
-        diag = int(np.sqrt(h**2 + w**2))
-        pad = (diag - w) // 2
-        padded = TF.pad(state_tensor, [pad]*4, fill=0)
-        
         for i in range(cfg.NUM_ROTATIONS):
-            angle = -(cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
-            rot = TF.rotate(padded, angle)
-            crop = TF.center_crop(rot, [h, w])
-            batch_rotated.append(crop)
-            
-        stack = torch.stack(batch_rotated) # [4, C, H, W]
+            angle = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
+            rot_img = self.transformer.rotate_single_with_padding(state_tensor, angle)
+            batch_rotated.append(rot_img)
+        
+        stack = torch.stack(batch_rotated)
         out = self.model(stack) # [4, 1, H, W]
         return out.permute(1, 0, 2, 3), stack, out # Returns [1, 4, H, W]
 

@@ -28,7 +28,7 @@ from tossingbot.learning.utils import RotationTransformer
 # =============================================================================
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
-DEBUG_MODE = True  # Set to True for visual debugging with user confirmation
+DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
 
 def get_epsilon(step):
     if step >= cfg.EXPLORE_STEPS: return cfg.EXPLORE_END
@@ -100,10 +100,15 @@ def main():
 
         # --- D. ACT ---
         action_type = "EXPLORE" if eps > random.random() else "EXPLOIT"
-        print(f"\n[Step {step_count:05d}] {action_type} | Rot={rot_idx} | Pixel=({u_world},{v_world}) | Eps={eps:.3f}")
-        reward = env.step(u_world, v_world, rot_idx)
+        
+        # Invert rotation index for the planner to test for a convention mismatch
+        rot_idx_for_planner = (cfg.NUM_ROTATIONS - rot_idx) % cfg.NUM_ROTATIONS if rot_idx != 0 else 0
+
+        print(f"\n[Step {step_count:05d}] {action_type} | Rot={rot_idx} (Planner_Rot={rot_idx_for_planner}) | Pixel=({u_world},{v_world}) | Eps={eps:.3f}")
+        reward = env.step(u_world, v_world, rot_idx_for_planner)
         
         # --- E. LEARN ---
+        # The original rot_idx is pushed to the buffer
         agent.buffer.push(obs.cpu(), u_rot, v_rot, rot_idx, reward)
         loss = agent.train()
         
@@ -142,7 +147,7 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         return cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2BGR)
     
     def draw_gripper_frame(img, label=""):
-        """Draw coordinate axes showing gripper/physical frame"""
+        """Draw coordinate axes showing gripper/physical frame (ROS convention)"""
         if not DEBUG_MODE:
             return img
         img = img.copy()
@@ -150,14 +155,14 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         center_x = img.shape[1] // 2
         line_len = 25
         
-        # GREEN: +X axis (gripper right)
+        # RED: +X axis (forward)
         cv2.arrowedLine(img, (center_x, center_y), (center_x + line_len, center_y), 
-                       (0, 255, 0), 2, tipLength=0.3)
-        # MAGENTA: +Y axis (gripper forward/up in image)
+                       (0, 0, 255), 2, tipLength=0.3)
+        # GREEN: +Y axis (left)
         cv2.arrowedLine(img, (center_x, center_y), (center_x, center_y - line_len), 
-                       (255, 0, 255), 2, tipLength=0.3)
-        # Cyan center dot
-        cv2.circle(img, (center_x, center_y), 3, (255, 255, 0), -1)
+                       (0, 255, 0), 2, tipLength=0.3)
+        # BLUE: +Z axis (up, out of image plane)
+        cv2.circle(img, (center_x, center_y), 3, (255, 0, 0), -1)
         
         if label:
             cv2.putText(img, label, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
@@ -174,7 +179,8 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         angle = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
         
         # Get what the network actually sees
-        network_input = to_cv(debug['inputs'][i])
+        network_input_tensor = debug['inputs'][i]
+        network_input = to_cv(network_input_tensor)
         
         # DEBUG MODE: Create overlay (original=green tint, rotated=magenta tint)
         if DEBUG_MODE:
@@ -193,6 +199,26 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         else:
             img_to_show = network_input
         
+        # Extract and visualize Depth Channel Input
+        depth_channel_tensor = network_input_tensor[3] # Assuming 4th channel (0-indexed) is depth
+        depth_numpy = depth_channel_tensor.detach().cpu().numpy()
+        
+        # Robustly scale normalized values to 0-255 for visualization
+        # Clip to 1st and 99th percentile to handle outliers
+        p1, p99 = np.percentile(depth_numpy, [1, 99])
+        depth_clipped = np.clip(depth_numpy, p1, p99)
+
+        # Scale the clipped data to 0-1
+        if p99 - p1 > 1e-6:
+            depth_normalized_for_viz = (depth_clipped - p1) / (p99 - p1)
+        else:
+            depth_normalized_for_viz = np.zeros_like(depth_clipped)
+
+        depth_viz_cv = (depth_normalized_for_viz * 255).astype(np.uint8)
+        depth_viz_cv = cv2.cvtColor(depth_viz_cv, cv2.COLOR_GRAY2BGR) # Convert to BGR for hstack
+        cv2.putText(depth_viz_cv, "Depth Input", (5, 15), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
         # Add angle label
         cv2.putText(img_to_show, f"{angle:.0f}deg", (5, img_to_show.shape[0]-5), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
@@ -201,8 +227,8 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         heatmap_raw = torch.sigmoid(debug['heatmaps'][i, 0]).detach().cpu().numpy()
         heatmap_color = cv2.applyColorMap((heatmap_raw * 255).astype(np.uint8), cv2.COLORMAP_JET)
         
-        # Combine
-        pair = np.hstack([img_to_show, heatmap_color])
+        # Combine (Input RGB + Input Depth + Heatmap) side-by-side
+        pair = np.hstack([img_to_show, depth_viz_cv, heatmap_color])
         
         # Highlight chosen rotation
         if i == chosen_rot:
@@ -213,11 +239,19 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
             cv2.line(pair, (v_rot, u_rot-10), (v_rot, u_rot+10), (0, 255, 0), 1)
             cv2.circle(pair, (v_rot, u_rot), 2, (0, 255, 0), -1)
             
-            # Same on heatmap
-            offset = img_to_show.shape[1]
-            cv2.line(pair, (v_rot+offset-10, u_rot), (v_rot+offset+10, u_rot), (0, 255, 0), 1)
-            cv2.line(pair, (v_rot+offset, u_rot-10), (v_rot+offset, u_rot+10), (0, 255, 0), 1)
-            cv2.circle(pair, (v_rot + offset, u_rot), 2, (0, 255, 0), -1)
+            # Same on heatmap and depth viz
+            offset_rgb = img_to_show.shape[1]
+            offset_depth = depth_viz_cv.shape[1]
+            
+            # On depth
+            cv2.line(pair, (v_rot+offset_rgb-10, u_rot), (v_rot+offset_rgb+10, u_rot), (0, 255, 0), 1)
+            cv2.line(pair, (v_rot+offset_rgb, u_rot-10), (v_rot+offset_rgb, u_rot+10), (0, 255, 0), 1)
+            cv2.circle(pair, (v_rot + offset_rgb, u_rot), 2, (0, 255, 0), -1)
+
+            # On heatmap
+            cv2.line(pair, (v_rot+offset_rgb+offset_depth-10, u_rot), (v_rot+offset_rgb+offset_depth+10, u_rot), (0, 255, 0), 1)
+            cv2.line(pair, (v_rot+offset_rgb+offset_depth, u_rot-10), (v_rot+offset_rgb+offset_depth, u_rot+10), (0, 255, 0), 1)
+            cv2.circle(pair, (v_rot + offset_rgb + offset_depth, u_rot), 2, (0, 255, 0), -1)
 
         row_images.append(pair)
 
@@ -245,7 +279,7 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
     cv2.circle(world_img_resized, (v_world_sc, u_world_sc), 3, (0, 255, 255), -1)
     
     # Draw Orientation Arrow
-    rad = np.deg2rad(-angle_deg) 
+    rad = np.deg2rad(angle_deg) 
     arrow_len = 50 * scale
     end_v = int(v_world_sc + arrow_len * np.cos(rad))
     end_u = int(u_world_sc + arrow_len * np.sin(rad))

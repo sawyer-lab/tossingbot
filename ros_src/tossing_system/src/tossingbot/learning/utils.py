@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+import torchvision.transforms.functional as TF
 
 from tossingbot import config as cfg
 
@@ -21,75 +22,33 @@ def normalize_tensor(image_tensor, device):
     # Epsilon (1e-6) prevents division by zero if std is 0
     return (image_tensor - mean) / (std + 1e-6)
 
-# --- 1. Tensor Rotations ---
-def create_rotated_batch(image_tensor, num_rotations, device):
-    """
-    Takes a single (C, H, W) tensor, normalizes it, 
-    and returns a batch (N, C, H, W) of rotated versions.
-    """
-    image_tensor = image_tensor.to(device)
-    
-    # --- STEP 1: NORMALIZE BEFORE ROTATING ---
-    norm_img = normalize_tensor(image_tensor, device)
-    
-    B, C, H, W = 1, norm_img.shape[0], norm_img.shape[1], norm_img.shape[2]
-    
-    rotated_list = []
-    
-    step = cfg.TOTAL_DEG / cfg.NUM_ROTATIONS
-    
-    for i in range(num_rotations):
-        angle_deg = i * step
-        # Positive to match gripper orientation convention
-        theta = np.radians(angle_deg) 
-
-        rot_mat = torch.tensor([
-            [np.cos(theta), -np.sin(theta), 0],
-            [np.sin(theta), np.cos(theta), 0]
-        ], dtype=torch.float32, device=device).unsqueeze(0) # (1, 2, 3)
-
-        grid = F.affine_grid(rot_mat, torch.Size((1, C, H, W)), align_corners=True)
-        
-        # Use the NORMALIZED image here
-        rot_img = F.grid_sample(norm_img.unsqueeze(0), grid, align_corners=True)
-        
-        rotated_list.append(rot_img.squeeze(0))
-
-    return torch.stack(rotated_list)
-
 class RotationTransformer:
     def __init__(self, device='cuda'):
         self.device = device
 
-    def to_gripper_frame(self, state_tensor, angle_deg):
+    def rotate_single_with_padding(self, state_tensor, angle_deg):
         """
-        Rotates the image TENSOR by 'angle_deg'.
-        Used to simulate the gripper rotating relative to the object.
+        Rotates a single image tensor, using padding to preserve corners.
+        This is the single, unified method for generating a rotated view.
         """
-        # Ensure 4 dimensions (B, C, H, W)
-        if state_tensor.dim() == 3:
-            state_tensor = state_tensor.unsqueeze(0)
-            
-        B, C, H, W = state_tensor.shape
-        
-        theta = np.radians(angle_deg)
-        
-        rot_mat = torch.tensor([
-            [np.cos(theta), -np.sin(theta), 0],
-            [np.sin(theta), np.cos(theta), 0]
-        ], dtype=torch.float32, device=self.device).unsqueeze(0)
-        
-        if B > 1:
-            rot_mat = rot_mat.repeat(B, 1, 1)
+        if state_tensor.dim() != 3:
+            # Assumes a single (C, H, W) tensor
+            raise ValueError("Input tensor must be 3D (C, H, W)")
 
-        grid = F.affine_grid(rot_mat, torch.Size((B, C, H, W)), align_corners=True)
-        rot_img = F.grid_sample(state_tensor, grid, align_corners=True, mode='nearest')
-        
-        return rot_img.squeeze(0) 
+        c, h, w = state_tensor.shape
+        diag = int(np.sqrt(h**2 + w**2))
+        pad = (diag - w) // 2
 
-    def to_world_frame(self, state_tensor, angle_deg):
-        """Inverse of to_gripper_frame."""
-        return self.to_gripper_frame(state_tensor, -angle_deg)
+        padded = TF.pad(state_tensor, [pad]*4, fill=0)
+        
+        # NOTE: We use a NEGATIVE angle because TF.rotate rotates the image
+        # counter-clockwise for a positive angle. To match our convention where
+        # rot_idx > 0 means a CCW rotation of the *world* (and thus a CW rotation
+        # of the image), we must pass a negative angle to TF.rotate.
+        rot = TF.rotate(padded, -angle_deg)
+        
+        crop = TF.center_crop(rot, [h, w])
+        return crop
 
     def rotate_pixel(self, u, v, angle_deg, H, W, to_gripper_frame=True):
         """
@@ -98,7 +57,10 @@ class RotationTransformer:
         """
         cx, cy = W / 2.0, H / 2.0
         
-        factor = -1.0 if to_gripper_frame else 1.0
+        # This factor logic is now correct after previous fixes.
+        # to_gripper_frame=True rotates the pixel with the image (CW)
+        # to_gripper_frame=False rotates it back (CCW)
+        factor = 1.0 if to_gripper_frame else -1.0
         rad = np.radians(angle_deg * factor)
         
         x = v - cx

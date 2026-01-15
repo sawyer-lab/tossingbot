@@ -49,7 +49,7 @@ class VisionProcessor:
         
         tensor_map[u, v, :3] = sorted_rgb
         
-        height_vals = sorted_xyz[:, 2] - config.TABLE_HEIGHT
+        height_vals = sorted_xyz[:, 2]
         tensor_map[u, v, 3] = np.clip(height_vals, 0.0, 1.0) 
 
         # Permute to (C, H, W) -> (4, H, W)
