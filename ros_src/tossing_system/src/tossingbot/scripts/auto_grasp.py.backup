@@ -1,0 +1,304 @@
+#!/usr/bin/env python3.8
+import sys
+import os
+
+# --- 1. PYTHON 3 ROS COMPATIBILITY ---
+sys.path.insert(0, '/geometry2_ws/devel/lib/python3/dist-packages')
+sys.path.insert(0, '/cv_bridge_ws/devel/lib/python3/dist-packages')
+
+# --- 2. CRITICAL IMPORT ORDER FIX ---
+try:
+    import open3d as o3d
+except ImportError:
+    print("Warning: Could not import open3d early. This might cause crashes.")
+
+import torch 
+import cv2   
+import rospy
+import numpy as np
+import random
+import math
+
+# --- 3. MODULE IMPORTS ---
+from tossingbot import config as cfg
+from tossingbot.environment.tossing_env import TossingEnv
+from tossingbot.learning.agent import TossingAgent
+from tossingbot.learning.utils import RotationTransformer
+
+# =============================================================================
+# DEBUG MODE: Set to False for normal training/execution
+# =============================================================================
+DEBUG_MODE = True  # Set to True for visual debugging with user confirmation
+
+def get_epsilon(step):
+    if step >= cfg.EXPLORE_STEPS: return cfg.EXPLORE_END
+    frac = float(step) / cfg.EXPLORE_STEPS
+    return cfg.EXPLORE_START - frac * (cfg.EXPLORE_START - cfg.EXPLORE_END)
+
+def main():
+    rospy.init_node('tossingbot_brain')
+
+    # 1. Init
+    env = TossingEnv()
+    agent = TossingAgent()
+    transformer = RotationTransformer() 
+    cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Dashboard", 1400, 900)
+    
+    # 2. Reset
+    obs, _ = env.reset(force_new=True)
+    failed_attempts = [] # Short term memory
+    
+    step_count = 0
+    
+    rospy.loginfo("STARTING MAIN LOOP...")
+
+    # 3. Loop
+    while not rospy.is_shutdown():
+        if obs is None: 
+            obs = env.get_observation()
+            rospy.sleep(0.1); continue
+
+        # --- A. THINK ---
+        eps = get_epsilon(step_count)
+        # agent returns the specific rotation index and the pixel IN THAT ROTATED FRAME
+        # In DEBUG_MODE, disable failed_attempts inhibition to test all rotations
+        fail_list = [] if DEBUG_MODE else failed_attempts
+        rot_idx, u_rot, v_rot, debug = agent.get_action(obs, eps, failed_attempts=fail_list)
+        
+        # --- B. TRANSFORM (Pixel Frame -> World Frame) ---
+        # Image was rotated by (TOTAL_DEG/NUM_ROTATIONS)*rot_idx
+        # The rotation code internally handles the negation for affine_grid
+        angle_deg = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
+        
+        u_world, v_world = transformer.rotate_pixel(
+            u_rot, v_rot, angle_deg, cfg.IMG_H, cfg.IMG_W, to_gripper_frame=False
+        )
+
+        # --- C. VISUALIZE (BEFORE ACTING) ---
+        # We pass everything needed to draw the full "Thought Process"
+        viz_img = render_dashboard(obs, debug, rot_idx, u_rot, v_rot, u_world, v_world, angle_deg, failed_attempts)
+        cv2.imshow("Dashboard", viz_img)
+        
+        # DEBUG_MODE: Wait for user confirmation before executing
+        if DEBUG_MODE:
+            print(f"\n{'='*70}")
+            print(f"[Step {step_count}] {debug['type']} (Eps: {eps:.2f})")
+            print(f"  Rotation: {rot_idx} → Image rotated by {angle_deg:.1f}°")
+            print(f"  Selected in ROTATED image: (u={u_rot}, v={v_rot})")
+            print(f"  Transformed to WORLD image: (u={u_world}, v={v_world})")
+            print(f"  (Should align visually: GREEN crosshair = CYAN crosshair location)")
+            print(f"{'='*70}")
+            print("Press ENTER to execute grasp (or 'q' to quit)...")
+            
+            key = cv2.waitKey(0)
+            if key == ord('q'):
+                break
+        else:
+            # Normal mode: just brief waitKey for cv2.imshow to update
+            cv2.waitKey(1)
+
+        # --- D. ACT ---
+        action_type = "EXPLORE" if eps > random.random() else "EXPLOIT"
+        print(f"\n[Step {step_count:05d}] {action_type} | Rot={rot_idx} | Pixel=({u_world},{v_world}) | Eps={eps:.3f}")
+        reward = env.step(u_world, v_world, rot_idx)
+        
+        # --- E. LEARN ---
+        agent.buffer.push(obs.cpu(), u_rot, v_rot, rot_idx, reward)
+        loss = agent.train()
+        
+        # --- F. SAVE ---
+        if step_count % cfg.SAVE_INTERVAL == 0 and step_count > 0:
+            agent.save_snapshot(step_count)
+
+        # --- G. RESULT ---
+        success = (reward > 0.5)
+        status = "✓ SUCCESS" if success else "✗ FAIL"
+        print(f"   Result: {status} | Reward={reward:.1f} | Loss={loss:.4f}\n")
+
+        if success:
+            failed_attempts = []
+        else:
+            failed_attempts.append((rot_idx, u_rot, v_rot))
+        
+        # --- H. NEXT EPISODE ---
+        obs, is_new = env.reset(previous_success=success)
+        if is_new: failed_attempts = []
+            
+        step_count += 1
+
+def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_world, angle_deg, failures):
+    """
+    Stitches a comprehensive dashboard with detailed visual debugging
+    [ Original | Rot0 | Rot1 | Rot2 | Rot3 ]
+    [ Overlay showing transformation ]
+    [      ORIGINAL WORLD FRAME VIEW      ]
+    """
+    # Helper: Convert PyTorch tensor (C,H,W) to BGR Image
+    def to_cv(t):
+        if t.dim() == 4: t = t[0] # Handle batch dim
+        img = t.detach().cpu().numpy()[:3].transpose(1, 2, 0)
+        img = np.clip(img, 0, 1) * 255
+        return cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2BGR)
+    
+    def draw_gripper_frame(img, label=""):
+        """Draw coordinate axes showing gripper/physical frame"""
+        if not DEBUG_MODE:
+            return img
+        img = img.copy()
+        center_y = img.shape[0] // 2
+        center_x = img.shape[1] // 2
+        line_len = 25
+        
+        # GREEN: +X axis (gripper right)
+        cv2.arrowedLine(img, (center_x, center_y), (center_x + line_len, center_y), 
+                       (0, 255, 0), 2, tipLength=0.3)
+        # MAGENTA: +Y axis (gripper forward/up in image)
+        cv2.arrowedLine(img, (center_x, center_y), (center_x, center_y - line_len), 
+                       (255, 0, 255), 2, tipLength=0.3)
+        # Cyan center dot
+        cv2.circle(img, (center_x, center_y), 3, (255, 255, 0), -1)
+        
+        if label:
+            cv2.putText(img, label, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
+        return img
+
+    # --- 1. TOP ROW: Original + All 4 Rotations ---
+    row_images = []
+    
+    # Show ORIGINAL with gripper frame overlay
+    orig_img_cv = to_cv(debug['state_viz'])
+    orig_with_frame = draw_gripper_frame(orig_img_cv, "ORIGINAL")
+    row_images.append(orig_with_frame)
+    
+    # Show each rotation with what network sees
+    rotated_images_with_frame = []
+    for i in range(cfg.NUM_ROTATIONS):
+        angle = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
+        
+        # Get what the network actually sees
+        network_input = to_cv(debug['inputs'][i])
+        
+        # Add gripper frame to show orientation
+        img_with_frame = draw_gripper_frame(network_input, f"{angle:.0f}deg")
+        
+        # Heatmap
+        heatmap_raw = torch.sigmoid(debug['heatmaps'][i, 0]).detach().cpu().numpy()
+        heatmap_color = cv2.applyColorMap((heatmap_raw * 255).astype(np.uint8), cv2.COLORMAP_JET)
+        
+        # Combine
+        pair = np.hstack([img_with_frame, heatmap_color])
+        
+        # Highlight chosen rotation
+        if i == chosen_rot:
+            cv2.rectangle(pair, (0,0), (pair.shape[1]-1, pair.shape[0]-1), (0, 255, 0), 3)
+            
+            # Crosshair on selected point
+            cv2.line(pair, (v_rot-10, u_rot), (v_rot+10, u_rot), (0, 255, 0), 1)
+            cv2.line(pair, (v_rot, u_rot-10), (v_rot, u_rot+10), (0, 255, 0), 1)
+            cv2.circle(pair, (v_rot, u_rot), 2, (0, 255, 0), -1)
+            
+            # Same on heatmap
+            offset = img_with_frame.shape[1]
+            cv2.line(pair, (v_rot+offset-10, u_rot), (v_rot+offset+10, u_rot), (0, 255, 0), 1)
+            cv2.line(pair, (v_rot+offset, u_rot-10), (v_rot+offset, u_rot+10), (0, 255, 0), 1)
+            cv2.circle(pair, (v_rot + offset, u_rot), 2, (0, 255, 0), -1)
+
+        row_images.append(pair)
+        rotated_images_with_frame.append(img_with_frame)
+
+    # Stack all horizontally
+    top_row = np.hstack(row_images)
+    
+    # --- 2. MIDDLE ROW: Overlay showing transformation (DEBUG only) ---
+    if DEBUG_MODE:
+        overlay_row = []
+        for i in range(cfg.NUM_ROTATIONS):
+            angle = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
+            
+            # Create overlay: Original (green tint) + Rotated (magenta tint)
+            orig_tinted = orig_img_cv.copy()
+            orig_tinted[:,:,1] = np.clip(orig_tinted[:,:,1] * 1.3, 0, 255)  # Green boost
+            
+            rotated_tinted = rotated_images_with_frame[i].copy()
+            rotated_tinted[:,:,0] = np.clip(rotated_tinted[:,:,0] * 1.3, 0, 255)  # Blue boost
+            rotated_tinted[:,:,2] = np.clip(rotated_tinted[:,:,2] * 1.3, 0, 255)  # Red boost (→magenta)
+            
+            # Blend 50/50
+            overlay = cv2.addWeighted(orig_tinted, 0.5, rotated_tinted, 0.5, 0)
+            
+            # Label
+            cv2.putText(overlay, f"Overlay {angle:.0f}deg", (5, 15), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            cv2.putText(overlay, "Green=Orig, Magenta=Rot", (5, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            
+            # Match the pair width (image + heatmap)
+            heatmap_raw = torch.sigmoid(debug['heatmaps'][i, 0]).detach().cpu().numpy()
+            heatmap_color = cv2.applyColorMap((heatmap_raw * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            overlay_pair = np.hstack([overlay, heatmap_color])
+            
+            overlay_row.append(overlay_pair)
+        
+        # Combine all overlays
+        overlay_combined = np.hstack(overlay_row)
+        # Add padding on left to align with top row (original img column)
+        pad_width = orig_with_frame.shape[1]
+        padding = np.zeros((overlay_combined.shape[0], pad_width, 3), dtype=np.uint8)
+        overlay_row_final = np.hstack([padding, overlay_combined])
+    else:
+        overlay_row_final = None
+
+    # --- 3. BOTTOM ROW: World View ---
+    world_img = to_cv(obs_tensor)
+    
+    # Draw gripper frame on world view too
+    world_img = draw_gripper_frame(world_img, "WORLD VIEW")
+    
+    # Scale world image to match top row HEIGHT (not width), so top takes more space
+    # Let's make world view half the height of the rotations
+    target_height = top_row.shape[0] // 2
+    scale = target_height / world_img.shape[0]
+    new_w = int(world_img.shape[1] * scale)
+    world_img_resized = cv2.resize(world_img, (new_w, target_height))
+    
+    # Since we resized, we must scale the coordinates too
+    u_world_sc = int(u_world * scale)
+    v_world_sc = int(v_world * scale)
+    
+    # FINER CROSSHAIR for world position
+    cv2.line(world_img_resized, (v_world_sc-20, u_world_sc), (v_world_sc+20, u_world_sc), (0, 255, 255), 2)
+    cv2.line(world_img_resized, (v_world_sc, u_world_sc-20), (v_world_sc, u_world_sc+20), (0, 255, 255), 2)
+    cv2.circle(world_img_resized, (v_world_sc, u_world_sc), 3, (0, 255, 255), -1)
+    
+    # Draw Orientation Arrow
+    rad = np.deg2rad(-angle_deg) 
+    arrow_len = 50 * scale
+    end_v = int(v_world_sc + arrow_len * np.cos(rad))
+    end_u = int(u_world_sc + arrow_len * np.sin(rad))
+    cv2.arrowedLine(world_img_resized, (v_world_sc, u_world_sc), (end_v, end_u), (255, 0, 255), 2, tipLength=0.3)
+    
+    # Add text labels
+    cv2.putText(world_img_resized, f"Rot{chosen_rot} ({angle_deg:.0f}deg) @ ({u_world},{v_world})", 
+                (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(world_img_resized, f"CYAN=Target, MAGENTA=Orientation", 
+                (20, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    
+    # Center the world view (add padding left and right to match top row width)
+    pad_total = top_row.shape[1] - world_img_resized.shape[1]
+    pad_left = pad_total // 2
+    pad_right = pad_total - pad_left
+    padding_left = np.zeros((world_img_resized.shape[0], pad_left, 3), dtype=np.uint8)
+    padding_right = np.zeros((world_img_resized.shape[0], pad_right, 3), dtype=np.uint8)
+    world_row = np.hstack([padding_left, world_img_resized, padding_right])
+
+    # --- 4. COMBINE ---
+    if DEBUG_MODE and overlay_row_final is not None:
+        final_dashboard = np.vstack([top_row, overlay_row_final, world_row])
+    else:
+        final_dashboard = np.vstack([top_row, world_row])
+    return final_dashboard
+
+if __name__ == '__main__':
+    main()

@@ -28,7 +28,7 @@ from tossingbot.learning.utils import RotationTransformer
 # =============================================================================
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
-DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
+DEBUG_MODE = True  # Set to True for visual debugging with user confirmation
 
 def get_epsilon(step):
     if step >= cfg.EXPLORE_STEPS: return cfg.EXPLORE_END
@@ -67,10 +67,9 @@ def main():
         rot_idx, u_rot, v_rot, debug = agent.get_action(obs, eps, failed_attempts=fail_list)
         
         # --- B. TRANSFORM (Pixel Frame -> World Frame) ---
-        # Image was rotated by -(TOTAL_DEG/NUM_ROTATIONS)*rot_idx
-        # To map coordinates back, we rotate by the SAME angle (not opposite!)
-        # This is because after center crop, we're in the same coordinate space
-        angle_deg = -(cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
+        # Image was rotated by (TOTAL_DEG/NUM_ROTATIONS)*rot_idx
+        # The rotation code internally handles the negation for affine_grid
+        angle_deg = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * rot_idx
         
         u_world, v_world = transformer.rotate_pixel(
             u_rot, v_rot, angle_deg, cfg.IMG_H, cfg.IMG_W, to_gripper_frame=False
@@ -131,7 +130,8 @@ def main():
 def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_world, angle_deg, failures):
     """
     Stitches a comprehensive dashboard with detailed visual debugging
-    [ Rot 0 ] [ Rot 1 ] [ Rot 2 ] [ Rot 3 ]
+    [ Original | Rot0 | Rot1 | Rot2 | Rot3 ]
+    [ Overlay showing transformation ]
     [      ORIGINAL WORLD FRAME VIEW      ]
     """
     # Helper: Convert PyTorch tensor (C,H,W) to BGR Image
@@ -140,45 +140,95 @@ def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_wor
         img = t.detach().cpu().numpy()[:3].transpose(1, 2, 0)
         img = np.clip(img, 0, 1) * 255
         return cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2BGR)
+    
+    def draw_gripper_frame(img, label=""):
+        """Draw coordinate axes showing gripper/physical frame"""
+        if not DEBUG_MODE:
+            return img
+        img = img.copy()
+        center_y = img.shape[0] // 2
+        center_x = img.shape[1] // 2
+        line_len = 25
+        
+        # GREEN: +X axis (gripper right)
+        cv2.arrowedLine(img, (center_x, center_y), (center_x + line_len, center_y), 
+                       (0, 255, 0), 2, tipLength=0.3)
+        # MAGENTA: +Y axis (gripper forward/up in image)
+        cv2.arrowedLine(img, (center_x, center_y), (center_x, center_y - line_len), 
+                       (255, 0, 255), 2, tipLength=0.3)
+        # Cyan center dot
+        cv2.circle(img, (center_x, center_y), 3, (255, 255, 0), -1)
+        
+        if label:
+            cv2.putText(img, label, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
+        return img
 
     # --- 1. TOP ROW: All 4 Rotations ---
     row_images = []
+    
+    # Get original image for overlay comparison
+    orig_img_cv = to_cv(debug['state_viz'])
+    
     for i in range(cfg.NUM_ROTATIONS):
-        # Input Image
-        in_img = to_cv(debug['inputs'][i]) 
+        angle = (cfg.TOTAL_DEG / cfg.NUM_ROTATIONS) * i
         
-        # Heatmap (Sigmoid -> ColorMap)
+        # Get what the network actually sees
+        network_input = to_cv(debug['inputs'][i])
+        
+        # DEBUG MODE: Create overlay (original=green tint, rotated=magenta tint)
+        if DEBUG_MODE:
+            orig_tinted = orig_img_cv.copy()
+            orig_tinted[:,:,1] = np.clip(orig_tinted[:,:,1] * 1.3, 0, 255)  # Green boost
+            
+            rotated_tinted = network_input.copy()
+            rotated_tinted[:,:,0] = np.clip(rotated_tinted[:,:,0] * 1.3, 0, 255)  # Blue boost
+            rotated_tinted[:,:,2] = np.clip(rotated_tinted[:,:,2] * 1.3, 0, 255)  # Red boost
+            
+            # Blend 50/50 to show transformation
+            img_to_show = cv2.addWeighted(orig_tinted, 0.5, rotated_tinted, 0.5, 0)
+            
+            # Draw gripper frame on overlay
+            img_to_show = draw_gripper_frame(img_to_show)
+        else:
+            img_to_show = network_input
+        
+        # Add angle label
+        cv2.putText(img_to_show, f"{angle:.0f}deg", (5, img_to_show.shape[0]-5), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
+        # Heatmap
         heatmap_raw = torch.sigmoid(debug['heatmaps'][i, 0]).detach().cpu().numpy()
         heatmap_color = cv2.applyColorMap((heatmap_raw * 255).astype(np.uint8), cv2.COLORMAP_JET)
         
-        # Combine (Input + Heatmap) side-by-side
-        pair = np.hstack([in_img, heatmap_color])
+        # Combine
+        pair = np.hstack([img_to_show, heatmap_color])
         
-        # 2. Highlight the CHOSEN rotation
+        # Highlight chosen rotation
         if i == chosen_rot:
-            # Green Border
             cv2.rectangle(pair, (0,0), (pair.shape[1]-1, pair.shape[0]-1), (0, 255, 0), 3)
             
-            # FINER CROSSHAIR on Input (selected point)
-            # Draw thin crosshair lines
+            # Crosshair on selected point
             cv2.line(pair, (v_rot-10, u_rot), (v_rot+10, u_rot), (0, 255, 0), 1)
             cv2.line(pair, (v_rot, u_rot-10), (v_rot, u_rot+10), (0, 255, 0), 1)
-            # Center dot
             cv2.circle(pair, (v_rot, u_rot), 2, (0, 255, 0), -1)
             
-            # Same on Heatmap (shift x by width of input)
-            offset = in_img.shape[1]
+            # Same on heatmap
+            offset = img_to_show.shape[1]
             cv2.line(pair, (v_rot+offset-10, u_rot), (v_rot+offset+10, u_rot), (0, 255, 0), 1)
             cv2.line(pair, (v_rot+offset, u_rot-10), (v_rot+offset, u_rot+10), (0, 255, 0), 1)
             cv2.circle(pair, (v_rot + offset, u_rot), 2, (0, 255, 0), -1)
 
         row_images.append(pair)
 
-    # Stack all rotations horizontally
+    # Stack all horizontally
     top_row = np.hstack(row_images)
 
     # --- 2. BOTTOM ROW: World View ---
     world_img = to_cv(obs_tensor)
+    
+    # Draw gripper frame on world view too
+    world_img = draw_gripper_frame(world_img, "WORLD VIEW")
     
     # Scale world image to match top row width
     scale = top_row.shape[1] / world_img.shape[1]

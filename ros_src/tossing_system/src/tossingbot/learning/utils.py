@@ -40,8 +40,8 @@ def create_rotated_batch(image_tensor, num_rotations, device):
     
     for i in range(num_rotations):
         angle_deg = i * step
-        # Negative because affine_grid rotates the sampling grid, effectively rotating image opposite
-        theta = -np.radians(angle_deg) 
+        # Positive to match gripper orientation convention
+        theta = np.radians(angle_deg) 
 
         rot_mat = torch.tensor([
             [np.cos(theta), -np.sin(theta), 0],
@@ -72,7 +72,7 @@ class RotationTransformer:
             
         B, C, H, W = state_tensor.shape
         
-        theta = -np.radians(angle_deg)
+        theta = np.radians(angle_deg)
         
         rot_mat = torch.tensor([
             [np.cos(theta), -np.sin(theta), 0],

@@ -5,16 +5,16 @@ from tossingbot import config as cfg  # <--- IMPORT THE TRUTH
 @dataclass
 class PlannerConfig:
     table_height: float = cfg.TABLE_HEIGHT
-    solver_steps: int = 40  # Increased from 20 for better resolution
+    solver_steps: int = 20  # Back to original
     
     # Weights
     w_smooth: float = 0.01     
     w_slack: float  = 10000.0  
     w_track: float  = 10.0     
-    w_goal: float   = 10000.0  # Increased to prioritize final accuracy
-    w_pos: float    = 100.0    # Decreased to allow deviation from straight line
-    w_ori: float    = 100.0    # Decreased to allow deviation from straight line
-    w_reg: float    = 0.001    # Reduced further to minimize interference
+    w_goal: float   = 1000.0   # Back to original
+    w_pos: float    = 10000.0  # Back to original
+    w_ori: float    = 10000.0  # Back to original
+    w_reg: float    = 0.5      # Back to original - helps prevent weird configurations
     q_natural: np.ndarray = field(default_factory=lambda: np.array(cfg.NEUTRAL_JOINT_POS))
 
     # Robot Limits

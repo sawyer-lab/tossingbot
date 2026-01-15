@@ -111,11 +111,9 @@ class CasadiPlanner:
         opts = {
             'ipopt.print_level': 0, 
             'ipopt.sb': 'yes', 
-            'ipopt.max_iter': 1000,  # Increased from 500
+            'ipopt.max_iter': 500,  # Back to original
             'print_time': 0, 
-            'ipopt.max_cpu_time': 5.0,  # Increased from 2.0
-            'ipopt.tol': 1e-6,  # Tighter tolerance
-            'ipopt.acceptable_tol': 1e-5  # Acceptable solution tolerance
+            'ipopt.max_cpu_time': 2.0  # Back to original
         }
         opti.solver('ipopt', opts)
         
@@ -231,18 +229,8 @@ class CasadiPlanner:
         total_cost += self.cfg.w_goal * ca.dot(err_pos_final, err_pos_final)
         
         dot_prod_final = ca.dot(rot_final, q_target)
-        
-        # HARD CONSTRAINT: Final position must be within 1cm
-        opti.subject_to(ca.sumsqr(pos_final - ca.DM(target_pos)) <= 0.01**2)
-
-        # HARD CONSTRAINT: Final orientation must be reasonably close
-        # Relaxed from 0.95 to 0.90 (~26 deg) to prevent solver crashes (NaN)
-        # We rely on the high w_goal cost to pull it tighter than this.
-        opti.subject_to(dot_prod_final * dot_prod_final >= 0.90)
-        
-        # Very strong cost to encourage perfect match
         err_ori_final = 1.0 - (dot_prod_final * dot_prod_final)
-        total_cost += self.cfg.w_goal * 20.0 * err_ori_final
+        total_cost += self.cfg.w_goal * err_ori_final
 
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)
