@@ -29,8 +29,10 @@ from tossingbot.learning.utils import RotationTransformer
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
 DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
+INFERENCE_ONLY = True  # Set to True to disable learning and only do inference
 
 def get_epsilon(step):
+    if INFERENCE_ONLY: return 0.0
     if step >= cfg.EXPLORE_STEPS: return cfg.EXPLORE_END
     frac = float(step) / cfg.EXPLORE_STEPS
     return cfg.EXPLORE_START - frac * (cfg.EXPLORE_START - cfg.EXPLORE_END)
@@ -58,6 +60,12 @@ def main():
         if obs is None: 
             obs = env.get_observation()
             rospy.sleep(0.1); continue
+
+        # If all current objects are picked, reset the scene and skip this iteration
+        if env.sim.all_objects_picked():
+            rospy.loginfo("All objects picked in current scene. Resetting environment...")
+            obs, _ = env.reset(force_new=True) # Force a new scene
+            continue # Skip action generation for this empty step
 
         # --- A. THINK ---
         eps = get_epsilon(step_count)

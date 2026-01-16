@@ -83,14 +83,14 @@ class RankBasedReplayBuffer:
             top_prios = sorted(self.priorities, reverse=True)[:5]
             top_prios_str = [f"{p:.4f}" for p in top_prios]
 
-            print(f"\n--- BUFFER DEBUG ---")
-            print(f"Global Buffer: {n_pos_total} Pos / {total} Total ({n_pos_total/total*100:.1f}%)")
-            print(f"Current Batch: {n_pos_batch} Pos / {len(batch)} Total")
-            print(f"Top Priorities: {top_prios_str}")
-            if n_pos_batch > 0:
-                print(f"SUCCESS SAMPLED! The prioritization is working.")
-            else:
-                print(f"No success in this batch (Normal if global success is < 1%)")
+            # print(f"\n--- BUFFER DEBUG ---")
+            # print(f"Global Buffer: {n_pos_total} Pos / {total} Total ({n_pos_total/total*100:.1f}%)")
+            # print(f"Current Batch: {n_pos_batch} Pos / {len(batch)} Total")
+            # print(f"Top Priorities: {top_prios_str}")
+            # if n_pos_batch > 0:
+            #     print(f"SUCCESS SAMPLED! The prioritization is working.")
+            # else:
+            #     print(f"No success in this batch (Normal if global success is < 1%)")
 
     def __len__(self):
         return len(self.buffer)

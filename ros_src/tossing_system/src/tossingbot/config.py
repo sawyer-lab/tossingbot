@@ -21,7 +21,7 @@ CENTER_Y = 0.0
 # Define ROI in Robot Frame
 ROI_X = [CENTER_X - WORKSPACE_SIZE/2, CENTER_X + WORKSPACE_SIZE/2]
 ROI_Y = [CENTER_Y - WORKSPACE_SIZE/2, CENTER_Y + WORKSPACE_SIZE/2]
-ROI_Z = [0.0, 0.5]
+ROI_Z = [0.0, 0.05]
 
 # Safety Heights
 GRASP_Z = 0.00       

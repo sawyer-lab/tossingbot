@@ -200,7 +200,7 @@ class TossingEnv:
             # Retry same scene (reset unpicked objects to anchor positions)
             self.sim.reset_to_anchor()
 
-        rospy.sleep(0.5)
+        rospy.sleep(1.5)
         return self.get_observation(), new_scene
 
     def step(self, u, v, rot_idx):
