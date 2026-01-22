@@ -22,7 +22,7 @@ class SimInterface:
         rospy.wait_for_service('/gazebo/set_model_state')
         self.set_state_srv = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.get_state_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
-        self.object_names = [f"banana_{i}" for i in range(4)]
+        self.object_names = ['I_shape', 'L_shape', 'T_shape', 'bar', 'cross', 'cube', 'cylinder', 'sphere']
         self.anchor_poses = {}
         self.picked_objects = set()  # Track which objects have been picked
 
@@ -111,7 +111,7 @@ class SimInterface:
                 # So successful grasp should be at least 0.75 + 0.10 = 0.85m
                 if resp.pose.position.z > cfg.TABLE_HEIGHT + 0.10:
                     self.picked_objects.add(obj)
-                    rospy.loginfo(f"PICKED: {obj} ({len(self.picked_objects)}/{len(self.object_names)})")
+                    rospy.loginfo(f"PICKED: {obj} ({len(self.picked_objects)}/{len(self.anchor_poses)})")
                     return True, obj
             except: pass
         return False, None
@@ -132,7 +132,7 @@ class SimInterface:
     
     def all_objects_picked(self):
         """Check if all objects in the scene have been picked."""
-        return len(self.picked_objects) >= len(self.object_names)
+        return len(self.picked_objects) >= len(self.anchor_poses)
 
 class TossingEnv:
     def __init__(self):
@@ -188,7 +188,7 @@ class TossingEnv:
             if all_picked:
                 rospy.loginfo(f"ALL OBJECTS PICKED! Generating new scene after {self.step_count} steps.")
             elif self.step_count >= self.max_steps:
-                rospy.loginfo(f"MAX STEPS ({self.max_steps}) REACHED. Picked {len(self.sim.picked_objects)}/{len(self.sim.object_names)} objects.")
+                rospy.loginfo(f"MAX STEPS ({self.max_steps}) REACHED. Picked {len(self.sim.picked_objects)}/{len(self.sim.anchor_poses)} objects.")
             else:
                 rospy.loginfo("GENERATING NEW SCENE...")
             

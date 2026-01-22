@@ -650,68 +650,78 @@
       <enable_wind>0</enable_wind>
     </model>
     <state world_name='default'>
-      <sim_time>87 216000000</sim_time>
-      <real_time>0 0</real_time>
-      <wall_time>1765639018 64611494</wall_time>
-      <iterations>0</iterations>
-      <model name='banana_4'>
-        <pose frame=''>0.461129 0.019465 0.832449 0 -0 0</pose>
+      <sim_time>89 425000000</sim_time>
+      <real_time>2 209822000</real_time>
+      <wall_time>1769101907 40030282</wall_time>
+      <iterations>2209</iterations>
+      <model name='I_shape'>
+        <pose frame=''>-1.22844 0.311081 0.0125 0 0 -8e-06</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>0.461129 0.019465 0.832449 0 -0 0</pose>
-          <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
+          <pose frame=''>-1.22844 0.311081 0.0125 0 0 -8e-06</pose>
+          <velocity>0.001527 1.6e-05 0.003654 -0.001266 0.122085 -6e-06</velocity>
+          <acceleration>3.05223 0.031472 7.30722 -2.53148 -0.874095 -0.003309</acceleration>
+          <wrench>0.457835 0.004721 1.09608 0 -0 0</wrench>
         </link>
       </model>
-      <model name='banana_0'>
-        <pose frame=''>-1.08444 0.487744 0 0 -0 0</pose>
+      <model name='L_shape'>
+        <pose frame=''>-2.02356 0.544341 0.0125 0 -0 2e-06</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>-1.08444 0.487744 0 0 -0 0</pose>
-          <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
+          <pose frame=''>-2.02356 0.544341 0.0125 0 -0 2e-06</pose>
+          <velocity>-0.000844 -0.000359 0.005082 0.02868 -0.067492 -1e-06</velocity>
+          <acceleration>-1.68744 -0.717018 10.1633 -2.33103 -0.103589 -3.14016</acceleration>
+          <wrench>-0.253117 -0.107553 1.52449 0 -0 0</wrench>
         </link>
       </model>
-      <model name='banana_1'>
-        <pose frame=''>-1.16336 -0.028301 0 0 -0 0</pose>
+      <model name='T_shape'>
+        <pose frame=''>-1.74241 0.862849 0.0125 0 -0 8e-06</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>-1.16336 -0.028301 0 0 -0 0</pose>
-          <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
+          <pose frame=''>-1.74241 0.862849 0.0125 0 -0 8e-06</pose>
+          <velocity>0.001397 -0.000121 0.002984 0.009664 0.111722 0</velocity>
+          <acceleration>2.7935 -0.241549 5.96706 -2.66407 -0.391245 3.13932</acceleration>
+          <wrench>0.419025 -0.036232 0.895059 0 -0 0</wrench>
         </link>
       </model>
-      <model name='banana_2'>
-        <pose frame=''>-1.40681 0.200766 0 0 -0 0</pose>
+      <model name='bar'>
+        <pose frame=''>-2.26375 0.872292 0.011498 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>-1.40681 0.200766 0 0 -0 0</pose>
+          <pose frame=''>-2.26375 0.872292 0.011498 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
+          <acceleration>-0 -0 -0 0 -0 0</acceleration>
+          <wrench>-0 -0 -0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='banana_3'>
-        <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+      <model name='cross'>
+        <pose frame=''>-1.79548 0.320284 0.011498 0 -1.3e-05 1e-06</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+          <pose frame=''>-1.79548 0.320284 0.011498 0 -1.3e-05 1e-06</pose>
           <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
+          <acceleration>0 -0 -0 0 -0 0</acceleration>
+          <wrench>0 -0 -0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='banana_4'>
-        <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+      <model name='cube'>
+        <pose frame=''>-2.12961 0.042749 0.011498 -0 -0 -0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+          <pose frame=''>-2.12961 0.042749 0.011498 -0 -0 -0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
+          <acceleration>-0 -0 0 0 -0 0</acceleration>
+          <wrench>-0 -0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='cylinder'>
+        <pose frame=''>-1.58978 -0.047934 0.013995 0 9.6e-05 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.58978 -0.047934 0.013995 0 9.6e-05 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>-0 0 0 0 -0 0</acceleration>
+          <wrench>-0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='ground_plane'>
@@ -719,6 +729,16 @@
         <scale>1 1 1</scale>
         <link name='link'>
           <pose frame=''>0 1 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='sphere'>
+        <pose frame=''>-1.92403 0.151032 0.01399 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.92403 0.151032 0.01399 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -798,7 +818,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>1.63656 -2.62751 3.51784 0 0.73964 1.86019</pose>
+        <pose frame=''>1.63174 -2.62895 3.51784 0 0.73964 1.86019</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
@@ -1366,275 +1386,667 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>1.5 1.5 1.5 0 -0 0</pose>
     </model>
-    <model name='banana_4'>
-      <static>0</static>
+    <model name='I_shape'>
       <link name='link'>
         <inertial>
-          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
-          <mass>0.000171533</mass>
+          <mass>0.15</mass>
           <inertia>
-            <ixx>4.27199e-07</ixx>
-            <ixy>1.59304e-23</ixy>
-            <ixz>-1.75631e-23</ixz>
-            <iyy>4.10766e-07</iyy>
-            <iyz>1.79147e-23</iyz>
-            <izz>4.07539e-08</izz>
+            <ixx>0.0002</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0002</iyy>
+            <iyz>0</iyz>
+            <izz>0.0004</izz>
           </inertia>
         </inertial>
-        <collision name='collision'>
+        <visual name='web_vis'>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.08 0.025 0.025</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Grey</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='web_col'>
+          <geometry>
+            <box>
+              <size>0.08 0.025 0.025</size>
+            </box>
           </geometry>
           <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
             <contact>
               <ode/>
             </contact>
             <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
           </surface>
           <max_contacts>10</max_contacts>
         </collision>
-        <visual name='visual'>
+        <visual name='left_vis'>
+          <pose frame=''>-0.04 0 0 0 -0 0</pose>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.02 0.06 0.025</size>
+            </box>
           </geometry>
           <material>
             <script>
-              <uri>model://011_banana/banana.material</uri>
-              <name>banana</name>
+              <name>Gazebo/Grey</name>
+              <uri>__default__</uri>
             </script>
           </material>
         </visual>
+        <collision name='left_col'>
+          <pose frame=''>-0.04 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.02 0.06 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='right_vis'>
+          <pose frame=''>0.04 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.02 0.06 0.025</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Grey</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='right_col'>
+          <pose frame=''>0.04 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.02 0.06 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose frame=''>-0.606457 0.019465 0 0 -0 0</pose>
+      <pose frame=''>-1.22844 0.311081 0 0 -0 0</pose>
     </model>
-    <model name='banana_0'>
-      <static>0</static>
+    <model name='L_shape'>
       <link name='link'>
         <inertial>
-          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
-          <mass>0.000171533</mass>
+          <mass>0.15</mass>
           <inertia>
-            <ixx>4.27199e-07</ixx>
-            <ixy>1.59304e-23</ixy>
-            <ixz>-1.75631e-23</ixz>
-            <iyy>4.10766e-07</iyy>
-            <iyz>1.79147e-23</iyz>
-            <izz>4.07539e-08</izz>
+            <ixx>0.0002</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0002</iyy>
+            <iyz>0</iyz>
+            <izz>0.0004</izz>
           </inertia>
         </inertial>
-        <collision name='collision'>
+        <visual name='long_vis'>
+          <pose frame=''>0 0.03 0 0 -0 0</pose>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.1 0.025 0.025</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Yellow</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='long_col'>
+          <pose frame=''>0 0.03 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.1 0.025 0.025</size>
+            </box>
           </geometry>
           <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
             <contact>
               <ode/>
             </contact>
             <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
           </surface>
           <max_contacts>10</max_contacts>
         </collision>
-        <visual name='visual'>
+        <visual name='short_vis'>
+          <pose frame=''>0.0375 -0.0125 0 0 -0 0</pose>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.025 0.06 0.025</size>
+            </box>
           </geometry>
           <material>
             <script>
-              <uri>model://011_banana/banana.material</uri>
-              <name>banana</name>
+              <name>Gazebo/Yellow</name>
+              <uri>__default__</uri>
             </script>
           </material>
         </visual>
+        <collision name='short_col'>
+          <pose frame=''>0.0375 -0.0125 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.025 0.06 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose frame=''>-1.08444 0.487744 0 0 -0 0</pose>
+      <pose frame=''>-2.02356 0.544341 0 0 -0 0</pose>
     </model>
-    <model name='banana_1'>
-      <static>0</static>
+    <model name='T_shape'>
       <link name='link'>
         <inertial>
-          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
-          <mass>0.000171533</mass>
+          <mass>0.15</mass>
           <inertia>
-            <ixx>4.27199e-07</ixx>
-            <ixy>1.59304e-23</ixy>
-            <ixz>-1.75631e-23</ixz>
-            <iyy>4.10766e-07</iyy>
-            <iyz>1.79147e-23</iyz>
-            <izz>4.07539e-08</izz>
+            <ixx>0.0002</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0002</iyy>
+            <iyz>0</iyz>
+            <izz>0.0004</izz>
           </inertia>
         </inertial>
-        <collision name='collision'>
+        <visual name='stem_vis'>
+          <pose frame=''>-0.02 0 0 0 -0 0</pose>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.08 0.025 0.025</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Purple</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='stem_col'>
+          <pose frame=''>-0.02 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.08 0.025 0.025</size>
+            </box>
           </geometry>
           <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
             <contact>
               <ode/>
             </contact>
             <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
           </surface>
           <max_contacts>10</max_contacts>
         </collision>
-        <visual name='visual'>
+        <visual name='top_vis'>
+          <pose frame=''>0.035 0 0 0 -0 0</pose>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.025 0.08 0.025</size>
+            </box>
           </geometry>
           <material>
             <script>
-              <uri>model://011_banana/banana.material</uri>
-              <name>banana</name>
+              <name>Gazebo/Purple</name>
+              <uri>__default__</uri>
             </script>
           </material>
         </visual>
+        <collision name='top_col'>
+          <pose frame=''>0.035 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.025 0.08 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose frame=''>-1.16336 -0.028301 0 0 -0 0</pose>
+      <pose frame=''>-1.74241 0.862849 0 0 -0 0</pose>
     </model>
-    <model name='banana_2'>
-      <static>0</static>
+    <model name='bar'>
       <link name='link'>
         <inertial>
-          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
-          <mass>0.000171533</mass>
+          <mass>0.1</mass>
           <inertia>
-            <ixx>4.27199e-07</ixx>
-            <ixy>1.59304e-23</ixy>
-            <ixz>-1.75631e-23</ixz>
-            <iyy>4.10766e-07</iyy>
-            <iyz>1.79147e-23</iyz>
-            <izz>4.07539e-08</izz>
+            <ixx>1e-05</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0002</iyy>
+            <iyz>0</iyz>
+            <izz>0.0002</izz>
           </inertia>
         </inertial>
-        <collision name='collision'>
-          <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
-          </geometry>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-          <max_contacts>10</max_contacts>
-        </collision>
         <visual name='visual'>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.15 0.025 0.025</size>
+            </box>
           </geometry>
           <material>
             <script>
-              <uri>model://011_banana/banana.material</uri>
-              <name>banana</name>
+              <name>Gazebo/Green</name>
+              <uri>__default__</uri>
             </script>
           </material>
         </visual>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.15 0.025 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose frame=''>-1.40681 0.200766 0 0 -0 0</pose>
+      <pose frame=''>-2.26375 0.872292 0 0 -0 0</pose>
     </model>
-    <model name='banana_3'>
-      <static>0</static>
+    <model name='cross'>
       <link name='link'>
         <inertial>
-          <pose frame=''>-0.009936 0.004073 0.017127 -1.55427 -1.3697 -0.336293</pose>
-          <mass>0.000171533</mass>
+          <mass>0.15</mass>
           <inertia>
-            <ixx>4.27199e-07</ixx>
-            <ixy>1.59304e-23</ixy>
-            <ixz>-1.75631e-23</ixz>
-            <iyy>4.10766e-07</iyy>
-            <iyz>1.79147e-23</iyz>
-            <izz>4.07539e-08</izz>
+            <ixx>0.0002</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0002</iyy>
+            <iyz>0</iyz>
+            <izz>0.0004</izz>
           </inertia>
         </inertial>
-        <collision name='collision'>
+        <visual name='stem_vis'>
           <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
-          </geometry>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-          <max_contacts>10</max_contacts>
-        </collision>
-        <visual name='visual'>
-          <geometry>
-            <mesh>
-              <uri>model://011_banana/google_16k/textured.obj</uri>
-            </mesh>
+            <box>
+              <size>0.12 0.025 0.025</size>
+            </box>
           </geometry>
           <material>
             <script>
-              <uri>model://011_banana/banana.material</uri>
-              <name>banana</name>
+              <name>Gazebo/White</name>
+              <uri>__default__</uri>
             </script>
           </material>
         </visual>
+        <collision name='stem_col'>
+          <geometry>
+            <box>
+              <size>0.12 0.025 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='crossbar_vis'>
+          <pose frame=''>0.03 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.025 0.08 0.025</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/White</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='crossbar_col'>
+          <pose frame=''>0.03 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.025 0.08 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose frame=''>-1.09245 0.230438 0 0 -0 0</pose>
+      <pose frame=''>-1.79548 0.320284 0 0 -0 0</pose>
+    </model>
+    <model name='cube'>
+      <link name='link'>
+        <inertial>
+          <mass>0.1</mass>
+          <inertia>
+            <ixx>0.0001</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0001</iyy>
+            <iyz>0</iyz>
+            <izz>0.0001</izz>
+          </inertia>
+        </inertial>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.025 0.025 0.025</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Blue</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.025 0.025 0.025</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-2.12961 0.042749 0 0 -0 0</pose>
+    </model>
+    <model name='cylinder'>
+      <link name='link'>
+        <inertial>
+          <mass>0.1</mass>
+          <inertia>
+            <ixx>1e-05</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0001</iyy>
+            <iyz>0</iyz>
+            <izz>0.0001</izz>
+          </inertia>
+        </inertial>
+        <visual name='visual'>
+          <pose frame=''>0 0 0 0 1.5707 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.015</radius>
+              <length>0.1</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Orange</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='collision'>
+          <pose frame=''>0 0 0 0 1.5707 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.015</radius>
+              <length>0.1</length>
+            </cylinder>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.58978 -0.047934 0 0 -0 0</pose>
+    </model>
+    <model name='sphere'>
+      <link name='link'>
+        <inertial>
+          <mass>0.1</mass>
+          <inertia>
+            <ixx>2e-05</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>2e-05</iyy>
+            <iyz>0</iyz>
+            <izz>2e-05</izz>
+          </inertia>
+        </inertial>
+        <visual name='visual'>
+          <geometry>
+            <sphere>
+              <radius>0.015</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Red</name>
+              <uri>__default__</uri>
+            </script>
+          </material>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <sphere>
+              <radius>0.015</radius>
+            </sphere>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>100</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.92403 0.151032 0 0 -0 0</pose>
     </model>
   </world>
 </sdf>

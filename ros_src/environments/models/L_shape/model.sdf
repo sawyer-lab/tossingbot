@@ -1,0 +1,36 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+  <model name='L_shape'>
+    <link name='link'>
+      <inertial>
+        <mass>0.15</mass>
+        <inertia>
+          <ixx>0.0002</ixx> <ixy>0</ixy> <ixz>0</ixz>
+          <iyy>0.0002</iyy> <iyz>0</iyz>
+          <izz>0.0004</izz>
+        </inertia>
+      </inertial>
+
+      <visual name='long_vis'>
+        <pose>0 0.03 0 0 0 0</pose>
+        <geometry><box><size>0.10 0.025 0.025</size></box></geometry>
+        <material><script><name>Gazebo/Yellow</name></script></material>
+      </visual>
+      <collision name='long_col'>
+        <pose>0 0.03 0 0 0 0</pose>
+        <geometry><box><size>0.10 0.025 0.025</size></box></geometry>
+        <surface><friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction></surface>
+      </collision>
+
+      <visual name='short_vis'>
+        <pose>0.0375 -0.0125 0 0 0 0</pose> <geometry><box><size>0.025 0.06 0.025</size></box></geometry>
+        <material><script><name>Gazebo/Yellow</name></script></material>
+      </visual>
+      <collision name='short_col'>
+        <pose>0.0375 -0.0125 0 0 0 0</pose>
+        <geometry><box><size>0.025 0.06 0.025</size></box></geometry>
+        <surface><friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction></surface>
+      </collision>
+    </link>
+  </model>
+</sdf>
