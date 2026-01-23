@@ -16,16 +16,18 @@ from tossingbot.planning.kinematics import CasadiKinematics
 from tossingbot.planning.casadi_planner import CasadiPlanner
 from tossingbot.planning.orientation_helper import RotationPrimitive
 from tossingbot.environment.health_monitor import HealthMonitor
+from tossingbot.tossing.motion_planner import TossingPlanner
 
 class SimInterface:
     def __init__(self):
         rospy.wait_for_service('/gazebo/set_model_state')
         self.set_state_srv = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.get_state_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
-        self.object_names = ['I_shape', 'L_shape', 'T_shape', 'bar', 'cross', 'cube', 'cylinder', 'sphere']
+        # self.object_names = ['I_shape', 'L_shape', 'T_shape']
+        self.object_names = ['bar' , 'cross', 'cylinder']
         self.anchor_poses = {}
         self.picked_objects = set()  # Track which objects have been picked
-
+        
     def spawn_new_problem(self):
         """Randomizes object locations with collision avoidance."""
         self.anchor_poses = {}
@@ -154,12 +156,16 @@ class TossingEnv:
         self.kinematics = CasadiKinematics(urdf_path, "base", "right_gripper_tip")
         self.planner = CasadiPlanner(self.kinematics) # Config injected automatically
         self.rot_helper = RotationPrimitive(num_rotations=cfg.NUM_ROTATIONS, total_deg=cfg.TOTAL_DEG)
+        self.tossing_planner = TossingPlanner()
 
         # State Tracking
         self.max_steps = 50
         self.step_count = 0
         self.recovery_attempts = 0
         self.max_recovery_attempts = 3
+        
+        # Tossing release timer
+        self.release_timer = None
 
         rospy.loginfo("Waiting for Camera Data...")
         while self.camera.get_latest_cloud()[0] is None and not rospy.is_shutdown():
@@ -254,8 +260,23 @@ class TossingEnv:
             path_up = self.planner.plan_cartesian(self.robot.get_joint_positions(), hover_pos, target_quat, duration=1.5)
             self._execute_trajectory(path_up)
 
+         
+            # Execute tossing trajectory with gripper release
+            sol = self.tossing_planner.get_trajectory(1.0)
+            release_index = sol['index']
+            dt = 0.01  # From TRAJECTORY_CONFIG
+            release_time = release_index * dt
+            
+            rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
+            
+            traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
+            self._execute_trajectory(traj, gripper_release_time=release_time)
+
+
             # E. Wait for physics to settle before checking success
             rospy.sleep(0.3)
+
+            
             
             grasp_width = self.gripper.get_current_position()
             is_holding = self.gripper.is_grasping()
@@ -282,6 +303,8 @@ class TossingEnv:
             
         except Exception as e:
             rospy.logerr(f"Exception during grasp execution: {e}")
+            # Cancel any pending gripper release on exception
+            self._cancel_gripper_release()
             # Attempt recovery on exception
             if not self._attempt_recovery():
                 return 0.0
@@ -311,7 +334,66 @@ class TossingEnv:
             rospy.logerr(f"Recovery failed: {reason}")
             return False
 
-    def _execute_trajectory(self, plan_data):
+    def _execute_trajectory(self, plan_data, gripper_release_time=None):
         if plan_data is None: return False
-        stream = [RobotCommand(p['position'], p['velocity'], p['acceleration']) for p in plan_data]
-        return self.robot.execute_stream(stream, ControlMode.TRAJECTORY)
+        
+        # Handle both dict format (from planner) and list format (from map_to_7dof)
+        if isinstance(plan_data, dict):
+            # Convert dict with Q, Qd, Qdd arrays to list of dicts
+            N = plan_data['Q'].shape[0]
+            stream = [RobotCommand(
+                position=plan_data['Q'][i].tolist(),
+                velocity=plan_data['Qd'][i].tolist(),
+                acceleration=plan_data['Qdd'][i].tolist()
+            ) for i in range(N)]
+        else:
+            # Original list of dicts format
+            stream = [RobotCommand(p['position'], p['velocity'], p['acceleration']) for p in plan_data]
+        
+        # Schedule gripper release if requested
+        if gripper_release_time is not None:
+            self._schedule_gripper_release(gripper_release_time)
+        
+        try:
+            result = self.robot.execute_stream(stream, ControlMode.TRAJECTORY)
+            return result
+        finally:
+            # Cancel timer if trajectory finished early or failed
+            self._cancel_gripper_release()
+    
+    def _schedule_gripper_release(self, delay_seconds):
+        """Schedule gripper to open after specified delay."""
+        # Cancel any existing timer
+        self._cancel_gripper_release()
+        
+        rospy.loginfo(f"Scheduling gripper release in {delay_seconds:.3f}s")
+        self.release_timer = rospy.Timer(
+            rospy.Duration(delay_seconds),
+            self._gripper_release_callback,
+            oneshot=True
+        )
+    
+    def _gripper_release_callback(self, event):
+        """Timer callback to open gripper during toss."""
+        if self.gripper.is_grasping():
+            rospy.loginfo("RELEASING GRIPPER during toss")
+            self.gripper.open()
+            # Optional: log endpoint velocity at release
+            try:
+                endpoint_state = self.robot.get_endpoint_state()
+                if endpoint_state:
+                    vel = endpoint_state['linear']
+                    speed = np.linalg.norm([vel.x, vel.y, vel.z])
+                    rospy.loginfo(f"Release speed: {speed:.3f} m/s")
+            except:
+                pass
+        else:
+            rospy.logwarn("Gripper release triggered but not grasping anything")
+        
+        self.release_timer = None
+    
+    def _cancel_gripper_release(self):
+        """Cancel pending gripper release timer."""
+        if self.release_timer is not None:
+            self.release_timer.shutdown()
+            self.release_timer = None
