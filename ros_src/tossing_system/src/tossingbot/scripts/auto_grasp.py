@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.8
 import sys
 import os
+import argparse
 
 # --- 1. PYTHON 3 ROS COMPATIBILITY ---
 sys.path.insert(0, '/geometry2_ws/devel/lib/python3/dist-packages')
@@ -24,12 +25,26 @@ from tossingbot import config as cfg
 from tossingbot.environment.tossing_env import TossingEnv
 from tossingbot.learning.agent import TossingAgent
 from tossingbot.learning.utils import RotationTransformer
+from tossingbot.learning.logger import TrainingLogger
 
 # =============================================================================
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
 DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
 INFERENCE_ONLY = True  # Set to True to disable learning and only do inference
+
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='TossingBot Auto-Grasp Training')
+    parser.add_argument('--weights', type=str, default='continue',
+                        help='Weight loading strategy: "continue" (load latest), "new" (fresh start), or path to checkpoint')
+    parser.add_argument('--name', type=str, default=None,
+                        help='Custom name for checkpoint files (e.g., "experiment_v2")')
+    parser.add_argument('--debug', action='store_true',
+                        help='Enable debug mode with visual confirmation')
+    parser.add_argument('--inference', action='store_true',
+                        help='Inference only mode (no training)')
+    return parser.parse_args()
 
 def get_epsilon(step):
     if INFERENCE_ONLY: return 0.0
@@ -38,20 +53,55 @@ def get_epsilon(step):
     return cfg.EXPLORE_START - frac * (cfg.EXPLORE_START - cfg.EXPLORE_END)
 
 def main():
+    # Parse arguments before ROS init
+    args = parse_args()
+    
+    # Update global flags from args
+    global DEBUG_MODE, INFERENCE_ONLY
+    if args.debug:
+        DEBUG_MODE = True
+    if args.inference:
+        INFERENCE_ONLY = True
+    
     rospy.init_node('tossingbot_brain')
+    
+    # Print configuration
+    print("\n" + "="*70)
+    print("TossingBot Auto-Grasp Training")
+    print("="*70)
+    print(f"Weight Strategy: {args.weights}")
+    if args.name:
+        print(f"Checkpoint Name: {args.name}")
+    print(f"Debug Mode: {DEBUG_MODE}")
+    print(f"Inference Only: {INFERENCE_ONLY}")
+    print("="*70 + "\n")
 
     # 1. Init
     env = TossingEnv()
-    agent = TossingAgent()
+    agent = TossingAgent(load_weights=args.weights)
+    
+    # Set custom checkpoint name if provided
+    if args.name:
+        agent.checkpoint_name = args.name
+        agent.training_start_time = agent.training_start_time or rospy.Time.now().to_sec()
+    
     transformer = RotationTransformer() 
     cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Dashboard", 1400, 900)
+    
+    # Initialize logger (unless inference only mode)
+    logger = None
+    if not INFERENCE_ONLY:
+        logger = TrainingLogger(cfg.LOGS_DIR, experiment_name=args.name)
     
     # 2. Reset
     obs, _ = env.reset(force_new=True)
     failed_attempts = [] # Short term memory
     
     step_count = 0
+    episode_count = 0
+    episode_steps = 0
+    episode_successes = 0
     
     rospy.loginfo("STARTING MAIN LOOP...")
 
@@ -109,24 +159,60 @@ def main():
         # --- D. ACT ---
         action_type = "EXPLORE" if eps > random.random() else "EXPLOIT"
         
+        # Get object poses BEFORE action (for logging)
+        object_poses = env.sim.get_object_poses()
+        
         # Invert rotation index for the planner to test for a convention mismatch
         rot_idx_for_planner = (cfg.NUM_ROTATIONS - rot_idx) % cfg.NUM_ROTATIONS if rot_idx != 0 else 0
 
         print(f"\n[Step {step_count:05d}] {action_type} | Rot={rot_idx} (Planner_Rot={rot_idx_for_planner}) | Pixel=({u_world},{v_world}) | Eps={eps:.3f}")
-        reward = env.step(u_world, v_world, rot_idx_for_planner)
+        reward, picked_object = env.step(u_world, v_world, rot_idx_for_planner)
         
         # --- E. LEARN ---
         # The original rot_idx is pushed to the buffer
         agent.buffer.push(obs.cpu(), u_rot, v_rot, rot_idx, reward)
         loss = agent.train()
         
-        # --- F. SAVE ---
+        # --- F. LOG ---
+        success = (reward > 0.5)
+        if logger:
+            step_data = {
+                'step': step_count,
+                'episode': episode_count,
+                'object_name': picked_object if picked_object else 'unknown',
+                'object_poses': object_poses,
+                'predicted_grasp': {
+                    'u': int(u_world),
+                    'v': int(v_world),
+                    'u_rot': int(u_rot),
+                    'v_rot': int(v_rot),
+                    'rotation_idx': int(rot_idx),
+                    'angle_deg': float(angle_deg),
+                    'confidence': float(debug['conf'])
+                },
+                'action_type': action_type,
+                'epsilon': float(eps),
+                'reward': float(reward),
+                'loss': float(loss),
+                'success': success,
+                'objects_in_scene': len(object_poses),
+                'failed_attempts_count': len(failed_attempts)
+            }
+            logger.log_step(step_data)
+        
+        # Track episode statistics
+        episode_steps += 1
+        if success:
+            episode_successes += 1
+        
+        # --- G. SAVE ---
         if step_count % cfg.SAVE_INTERVAL == 0 and step_count > 0:
             agent.save_snapshot(step_count)
+            if logger:
+                logger.flush()  # Flush logs at checkpoint intervals
 
-        # --- G. RESULT ---
-        success = (reward > 0.5)
-        status = "✓ SUCCESS" if success else "✗ FAIL"
+        # --- H. RESULT ---
+        status = "SUCCESS" if success else "FAIL"
         print(f"   Result: {status} | Reward={reward:.1f} | Loss={loss:.4f}\n")
 
         if success:
@@ -134,11 +220,30 @@ def main():
         else:
             failed_attempts.append((rot_idx, u_rot, v_rot))
         
-        # --- H. NEXT EPISODE ---
+        # --- I. NEXT EPISODE ---
         obs, is_new = env.reset(previous_success=success)
-        if is_new: failed_attempts = []
+        if is_new: 
+            # Log episode end
+            if logger and episode_steps > 0:
+                episode_summary = {
+                    'episode': episode_count,
+                    'steps_in_episode': episode_steps,
+                    'successes_in_episode': episode_successes,
+                    'success_rate': episode_successes / episode_steps if episode_steps > 0 else 0.0
+                }
+                logger.log_episode_end(episode_summary)
+            
+            failed_attempts = []
+            episode_count += 1
+            episode_steps = 0
+            episode_successes = 0
             
         step_count += 1
+    
+    # Cleanup on exit
+    if logger:
+        logger.close()
+        print("\nTraining session complete. Logs saved.")
 
 def render_dashboard(obs_tensor, debug, chosen_rot, u_rot, v_rot, u_world, v_world, angle_deg, failures):
     """

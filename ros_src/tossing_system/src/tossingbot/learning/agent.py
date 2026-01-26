@@ -13,7 +13,12 @@ from tossingbot.learning.buffer import RankBasedReplayBuffer
 from tossingbot.learning.utils import RotationTransformer
 
 class TossingAgent:
-    def __init__(self):
+    def __init__(self, load_weights='continue', load_buffer=True):
+        """
+        Args:
+            load_weights: 'continue' (load latest), 'new' (fresh start), or path to specific checkpoint
+            load_buffer: whether to load saved replay buffer (default: True)
+        """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Model
@@ -25,8 +30,18 @@ class TossingAgent:
         # Memory & Utils
         self.buffer = RankBasedReplayBuffer(capacity=cfg.BUFFER_CAPACITY)
         self.transformer = RotationTransformer(device=self.device)
+        
+        # Training metadata
+        self.training_start_time = None
+        self.checkpoint_name = None
                 
-        self.load_snapshot()
+        # Load weights based on strategy
+        if load_weights != 'new':
+            self.load_weights(load_weights if load_weights != 'continue' else None)
+        
+        # Load replay buffer if requested
+        if load_buffer and cfg.SAVE_BUFFER:
+            self.load_buffer()
 
     def get_action(self, state_tensor, epsilon=0.0, failed_attempts=[]):
         """
@@ -139,22 +154,106 @@ class TossingAgent:
         return out.permute(1, 0, 2, 3), stack, out # Returns [1, 4, H, W]
 
     def save_snapshot(self, step):
-        if not os.path.exists(cfg.WEIGHTS_DIR): os.makedirs(cfg.WEIGHTS_DIR)
-        torch.save({
+        """Save checkpoint with timestamp or custom name"""
+        import datetime
+        if not os.path.exists(cfg.WEIGHTS_DIR): 
+            os.makedirs(cfg.WEIGHTS_DIR)
+        
+        # Generate checkpoint filename
+        if self.checkpoint_name:
+            filename = f"tossingbot_auto_{self.checkpoint_name}_step{step}.pth"
+        else:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"tossingbot_auto_{timestamp}_step{step}.pth"
+        
+        checkpoint_path = os.path.join(cfg.WEIGHTS_DIR, filename)
+        latest_path = os.path.join(cfg.WEIGHTS_DIR, "tossingbot_auto_latest.pth")
+        
+        # Save checkpoint with metadata
+        checkpoint = {
             'model': self.model.state_dict(),
-            'opt': self.optimizer.state_dict()
-        }, cfg.SAVE_PATH)
-        # Pickle buffer separately
-        import pickle
-        with open(cfg.BUFFER_PATH, 'wb') as f: pickle.dump(self.buffer, f)
+            'opt': self.optimizer.state_dict(),
+            'step': step,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'checkpoint_name': self.checkpoint_name
+        }
+        
+        if self.training_start_time:
+            checkpoint['training_start_time'] = self.training_start_time
+        
+        torch.save(checkpoint, checkpoint_path)
+        
+        # Create/update symlink to latest
+        if os.path.exists(latest_path) or os.path.islink(latest_path):
+            os.remove(latest_path)
+        os.symlink(os.path.basename(checkpoint_path), latest_path)
+        
+        print(f"Saved checkpoint: {filename}")
+        
+        # Save replay buffer if enabled
+        if cfg.SAVE_BUFFER:
+            self.save_buffer()
 
-    def load_snapshot(self):
-        if os.path.exists(cfg.SAVE_PATH):
-            ckpt = torch.load(cfg.SAVE_PATH, map_location=self.device)
+    def load_weights(self, path=None):
+        """
+        Load model weights from checkpoint.
+        Args:
+            path: Specific checkpoint path, or None to load latest
+        """
+        if path is None:
+            # Try to load latest
+            latest_path = os.path.join(cfg.WEIGHTS_DIR, "tossingbot_auto_latest.pth")
+            if not os.path.exists(latest_path):
+                # Fallback to old naming convention
+                path = cfg.SAVE_PATH
+                if not os.path.exists(path):
+                    print("No existing weights found. Starting with random initialization.")
+                    return
+            else:
+                path = latest_path
+        
+        if not os.path.exists(path):
+            print(f"Warning: Checkpoint not found at {path}. Starting with random initialization.")
+            return
+        
+        try:
+            ckpt = torch.load(path, map_location=self.device)
             self.model.load_state_dict(ckpt['model'])
             self.optimizer.load_state_dict(ckpt['opt'])
-            print("Loaded Model Weights.")
-        if os.path.exists(cfg.BUFFER_PATH):
+            
+            # Load metadata if available
+            if 'checkpoint_name' in ckpt and ckpt['checkpoint_name']:
+                self.checkpoint_name = ckpt['checkpoint_name']
+            if 'training_start_time' in ckpt:
+                self.training_start_time = ckpt['training_start_time']
+            
+            step_info = f" (step {ckpt['step']})" if 'step' in ckpt else ""
+            print(f"Loaded weights from: {os.path.basename(path)}{step_info}")
+        except Exception as e:
+            print(f"Error loading checkpoint: {e}")
+            print("Starting with random initialization.")
+    
+    def save_buffer(self):
+        """Save replay buffer to disk"""
+        try:
             import pickle
-            with open(cfg.BUFFER_PATH, 'rb') as f: self.buffer = pickle.load(f)
-            print("Loaded Replay Buffer.")
+            with open(cfg.BUFFER_PATH, 'wb') as f:
+                pickle.dump(self.buffer, f)
+            print(f"Saved replay buffer ({len(self.buffer)} experiences)")
+        except Exception as e:
+            print(f"Warning: Could not save replay buffer: {e}")
+    
+    def load_buffer(self):
+        """Load replay buffer from disk"""
+        if not os.path.exists(cfg.BUFFER_PATH):
+            print("No saved replay buffer found. Starting with empty buffer.")
+            return
+        
+        try:
+            import pickle
+            with open(cfg.BUFFER_PATH, 'rb') as f:
+                self.buffer = pickle.load(f)
+            print(f"Loaded replay buffer ({len(self.buffer)} experiences)")
+        except Exception as e:
+            print(f"Warning: Could not load replay buffer: {e}")
+            print("Starting with empty buffer.")

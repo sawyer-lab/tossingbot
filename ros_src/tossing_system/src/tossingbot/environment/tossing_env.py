@@ -23,8 +23,8 @@ class SimInterface:
         rospy.wait_for_service('/gazebo/set_model_state')
         self.set_state_srv = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.get_state_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
-        # self.object_names = ['I_shape', 'L_shape', 'T_shape']
-        self.object_names = ['bar' , 'cross', 'cylinder']
+        self.object_names = ['I_shape', 'L_shape', 'T_shape']
+        # self.object_names = ['bar' , 'cross', 'cylinder']
         self.anchor_poses = {}
         self.picked_objects = set()  # Track which objects have been picked
         
@@ -135,6 +135,34 @@ class SimInterface:
     def all_objects_picked(self):
         """Check if all objects in the scene have been picked."""
         return len(self.picked_objects) >= len(self.anchor_poses)
+    
+    def get_object_poses(self):
+        """
+        Get current poses of all objects in the scene.
+        Returns: dict mapping object_name -> {'position': [x,y,z], 'orientation': [x,y,z,w]}
+        """
+        poses = {}
+        for obj_name in self.object_names:
+            if obj_name in self.picked_objects:
+                continue  # Skip already picked objects
+            try:
+                resp = self.get_state_srv(obj_name, "world")
+                poses[obj_name] = {
+                    'position': [
+                        resp.pose.position.x,
+                        resp.pose.position.y,
+                        resp.pose.position.z
+                    ],
+                    'orientation': [
+                        resp.pose.orientation.x,
+                        resp.pose.orientation.y,
+                        resp.pose.orientation.z,
+                        resp.pose.orientation.w
+                    ]
+                }
+            except:
+                pass
+        return poses
 
 class TossingEnv:
     def __init__(self):
@@ -245,12 +273,12 @@ class TossingEnv:
             # 4. Execute Primitive: Hover -> Down -> Close -> Up
             # A. Hover
             ik_hover = self.planner.compute_inverse_kinematics(q_curr, hover_pos, target_quat)
-            if ik_hover is None: return 0.0
+            if ik_hover is None: return 0.0, None
             self.robot.move_to_joint_positions(ik_hover, timeout=2.0)
 
             # B. Down
             path_down = self.planner.plan_cartesian(self.robot.get_joint_positions(), target_pos, target_quat, duration=1.5)
-            if not self._execute_trajectory(path_down): return 0.0
+            if not self._execute_trajectory(path_down): return 0.0, None
             
             # C. Grasp
             self.gripper.close()
@@ -261,16 +289,16 @@ class TossingEnv:
             self._execute_trajectory(path_up)
 
          
-            # Execute tossing trajectory with gripper release
-            sol = self.tossing_planner.get_trajectory(1.0)
-            release_index = sol['index']
-            dt = 0.01  # From TRAJECTORY_CONFIG
-            release_time = release_index * dt
+            # # Execute tossing trajectory with gripper release
+            # sol = self.tossing_planner.get_trajectory(1.0)
+            # release_index = sol['index']
+            # dt = 0.01  # From TRAJECTORY_CONFIG
+            # release_time = release_index * dt
             
-            rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
+            # rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
             
-            traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
-            self._execute_trajectory(traj, gripper_release_time=release_time)
+            # traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
+            # self._execute_trajectory(traj, gripper_release_time=release_time)
 
 
             # E. Wait for physics to settle before checking success
@@ -292,14 +320,14 @@ class TossingEnv:
                 # Remove the picked object from the scene
                 self.sim.remove_picked_object(picked_obj)
                 self.recovery_attempts = 0  # Reset recovery counter on success
+                return reward, picked_obj  # Return object name
             else:
                 reward = 0.0
                 if is_holding and not success:
                     print(f"GRASP FAILED - holding something but no object lifted (Width: {grasp_width:.4f}m)")
                 else:
                     print(f"GRASP FAILED (Width: {grasp_width:.4f}m)")
-
-            return reward
+                return reward, None  # No object picked
             
         except Exception as e:
             rospy.logerr(f"Exception during grasp execution: {e}")
@@ -307,8 +335,8 @@ class TossingEnv:
             self._cancel_gripper_release()
             # Attempt recovery on exception
             if not self._attempt_recovery():
-                return 0.0
-            return 0.0
+                return 0.0, None
+            return 0.0, None
     
     def _attempt_recovery(self):
         """
