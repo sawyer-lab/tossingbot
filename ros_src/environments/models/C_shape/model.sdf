@@ -1,0 +1,70 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+  <model name='C_shape'>
+    <link name='link'>
+      <inertial>
+        <mass>0.2</mass>
+        <inertia>
+          <ixx>0.0003</ixx> <ixy>0</ixy> <ixz>0</ixz>
+          <iyy>0.0003</iyy> <iyz>0</iyz>
+          <izz>0.0006</izz>
+        </inertia>
+      </inertial>
+
+      <visual name='spine_vis'>
+        <pose>-0.02 0 0 0 0 0</pose>
+        <geometry>
+           <box><size>0.025 0.10 0.035</size></box>
+        </geometry>
+        <material><script><name>Gazebo/Purple</name></script></material>
+      </visual>
+      <collision name='spine_col'>
+        <pose>-0.02 0 0 0 0 0</pose>
+        <geometry>
+           <box><size>0.025 0.10 0.035</size></box>
+        </geometry>
+        <surface>
+           <friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction>
+           <contact><ode><kp>100000.0</kp><kd>1.0</kd><min_depth>0.001</min_depth></ode></contact>
+        </surface>
+      </collision>
+
+      <visual name='top_vis'>
+        <pose>0.0225 0.0375 0 0 0 0</pose>
+        <geometry>
+           <box><size>0.06 0.025 0.035</size></box>
+        </geometry>
+        <material><script><name>Gazebo/Purple</name></script></material>
+      </visual>
+      <collision name='top_col'>
+        <pose>0.0225 0.0375 0 0 0 0</pose>
+        <geometry>
+           <box><size>0.06 0.025 0.035</size></box>
+        </geometry>
+        <surface>
+           <friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction>
+           <contact><ode><kp>100000.0</kp><kd>1.0</kd><min_depth>0.001</min_depth></ode></contact>
+        </surface>
+      </collision>
+
+      <visual name='bot_vis'>
+        <pose>0.0225 -0.0375 0 0 0 0</pose>
+        <geometry>
+           <box><size>0.06 0.025 0.035</size></box>
+        </geometry>
+        <material><script><name>Gazebo/Purple</name></script></material>
+      </visual>
+      <collision name='bot_col'>
+        <pose>0.0225 -0.0375 0 0 0 0</pose>
+        <geometry>
+           <box><size>0.06 0.025 0.035</size></box>
+        </geometry>
+        <surface>
+           <friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction>
+           <contact><ode><kp>100000.0</kp><kd>1.0</kd><min_depth>0.001</min_depth></ode></contact>
+        </surface>
+      </collision>
+
+    </link>
+  </model>
+</sdf>

@@ -2,6 +2,7 @@
 """
 Grasp Visualization Script for TossingBot
 Overlays predicted grasp points on heightmaps
+Can be used standalone or imported by session_tools.py
 """
 import argparse
 import json
@@ -10,6 +11,7 @@ import sys
 import numpy as np
 import cv2
 from pathlib import Path
+from datetime import datetime
 
 
 def load_log(log_path):
@@ -225,8 +227,105 @@ def create_per_object_examples(steps, output_dir):
             print(f"  Saved examples for {obj_name}: {output_path}")
 
 
+def visualize_session_from_path(log_path, output_dir, max_samples=100):
+    """
+    Visualize grasps from training log.
+    This is the main function that can be called by session_tools.py
+    
+    Args:
+        log_path: Path to training log file
+        output_dir: Directory to save visualizations
+        max_samples: Maximum number of samples for montage
+    
+    Returns:
+        bool: True if successful
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print(f"\n{'='*60}")
+    print(f"TossingBot Grasp Visualization")
+    print(f"{'='*60}")
+    print(f"Log file: {log_path}")
+    print(f"Output directory: {output_dir}")
+    print(f"{'='*60}\n")
+    
+    # Load log
+    print("Loading log file...")
+    steps = load_log(log_path)
+    
+    if len(steps) == 0:
+        print("Error: No step data found in log file!")
+        return False
+    
+    print(f"Loaded {len(steps)} training steps\n")
+    
+    # Generate visualizations
+    print("Creating visualizations...")
+    
+    # Overall montage
+    montage_path = os.path.join(output_dir, 'grasp_montage.png')
+    create_summary_montage(steps, montage_path, max_samples=max_samples)
+    
+    # Best vs worst
+    create_best_worst_comparison(steps, output_dir)
+    
+    # Per-object examples
+    create_per_object_examples(steps, output_dir)
+    
+    print(f"\n{'='*60}")
+    print(f"Visualization complete! Results saved to: {output_dir}")
+    print(f"{'='*60}\n")
+    print("Note: These visualizations use placeholder heightmaps.")
+    print("To overlay on actual heightmaps, you would need to save")
+    print("heightmap images during training and load them here.")
+    
+    return True
+
+
+def visualize_session(session, samples=100):
+    """
+    Visualize grasps for a training session object.
+    Convenience wrapper for use with SessionManager.
+    
+    Args:
+        session: Session object from SessionManager
+        samples: Maximum number of samples for montage
+    
+    Returns:
+        bool: True if successful
+    """
+    log_path = session.get_log_path()
+    output_dir = os.path.join(session.analysis_dir, "visualizations")
+    
+    if not os.path.exists(log_path):
+        print(f"Error: Log file not found at {log_path}")
+        print("Train the session first to generate logs.")
+        return False
+    
+    print(f"Visualizing session: {session.name}")
+    return visualize_session_from_path(log_path, output_dir, samples)
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Visualize TossingBot grasps from training logs')
+    parser = argparse.ArgumentParser(
+        description='Visualize TossingBot grasps from training logs',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  # Visualize from log file path
+  %(prog)s --log logs/training_log.jsonl
+  
+  # Custom output directory
+  %(prog)s --log logs/training_log.jsonl --output my_viz
+  
+  # Control montage size
+  %(prog)s --log logs/training_log.jsonl --samples 200
+
+Note:
+  For session-based visualization, use session_tools.py instead:
+    python session_tools.py visualize --session <session_id>
+        '''
+    )
     parser.add_argument('--log', type=str, required=True,
                         help='Path to training log file (.jsonl)')
     parser.add_argument('--output', type=str, default=None,
@@ -243,50 +342,14 @@ def main():
     
     # Create output directory
     if args.output is None:
-        from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = f"visualization_results/{timestamp}"
     else:
         output_dir = args.output
     
-    os.makedirs(output_dir, exist_ok=True)
-    
-    print(f"\n{'='*60}")
-    print(f"TossingBot Grasp Visualization")
-    print(f"{'='*60}")
-    print(f"Log file: {args.log}")
-    print(f"Output directory: {output_dir}")
-    print(f"{'='*60}\n")
-    
-    # Load log
-    print("Loading log file...")
-    steps = load_log(args.log)
-    
-    if len(steps) == 0:
-        print("Error: No step data found in log file!")
-        sys.exit(1)
-    
-    print(f"Loaded {len(steps)} training steps\n")
-    
-    # Generate visualizations
-    print("Creating visualizations...")
-    
-    # Overall montage
-    montage_path = os.path.join(output_dir, 'grasp_montage.png')
-    create_summary_montage(steps, montage_path, max_samples=args.samples)
-    
-    # Best vs worst
-    create_best_worst_comparison(steps, output_dir)
-    
-    # Per-object examples
-    create_per_object_examples(steps, output_dir)
-    
-    print(f"\n{'='*60}")
-    print(f"Visualization complete! Results saved to: {output_dir}")
-    print(f"{'='*60}\n")
-    print("Note: These visualizations use placeholder heightmaps.")
-    print("To overlay on actual heightmaps, you would need to save")
-    print("heightmap images during training and load them here.")
+    # Run visualization
+    success = visualize_session_from_path(args.log, output_dir, args.samples)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == '__main__':

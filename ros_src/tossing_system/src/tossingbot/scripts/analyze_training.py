@@ -2,6 +2,7 @@
 """
 Training Analysis Script for TossingBot
 Generates plots and statistics from training logs
+Can be used standalone or imported by session_tools.py
 """
 import argparse
 import json
@@ -341,8 +342,101 @@ def generate_summary_stats(steps, output_dir):
     print(f"Average Confidence: {avg_confidence:.4f}")
 
 
+def analyze_session_from_path(log_path, output_dir, window=50):
+    """
+    Analyze training session from log file.
+    This is the main function that can be called by session_tools.py
+    
+    Args:
+        log_path: Path to training log file
+        output_dir: Directory to save plots
+        window: Moving average window size
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print(f"\n{'='*60}")
+    print(f"TossingBot Training Analysis")
+    print(f"{'='*60}")
+    print(f"Log file: {log_path}")
+    print(f"Output directory: {output_dir}")
+    print(f"{'='*60}\n")
+    
+    # Load log
+    print("Loading log file...")
+    entries = load_log(log_path)
+    steps = extract_steps(entries)
+    
+    if len(steps) == 0:
+        print("Error: No step data found in log file!")
+        return False
+    
+    print(f"Loaded {len(steps)} training steps\n")
+    
+    # Generate plots
+    print("Generating plots...")
+    plot_success_rate(steps, output_dir, window=window)
+    plot_per_object_success(steps, output_dir)
+    plot_loss_curve(steps, output_dir, window=window)
+    plot_epsilon_decay(steps, output_dir)
+    plot_confidence_distribution(steps, output_dir)
+    plot_grasp_heatmap(steps, output_dir)
+    plot_rotation_distribution(steps, output_dir)
+    
+    # Generate summary
+    print("\nGenerating summary statistics...")
+    generate_summary_stats(steps, output_dir)
+    
+    print(f"\n{'='*60}")
+    print(f"Analysis complete! Results saved to: {output_dir}")
+    print(f"{'='*60}\n")
+    
+    return True
+
+
+def analyze_session(session, window=50):
+    """
+    Analyze a training session object.
+    Convenience wrapper for use with SessionManager.
+    
+    Args:
+        session: Session object from SessionManager
+        window: Moving average window size
+    
+    Returns:
+        bool: True if successful
+    """
+    log_path = session.get_log_path()
+    output_dir = os.path.join(session.analysis_dir, "plots")
+    
+    if not os.path.exists(log_path):
+        print(f"Error: Log file not found at {log_path}")
+        print("Train the session first to generate logs.")
+        return False
+    
+    print(f"Analyzing session: {session.name}")
+    return analyze_session_from_path(log_path, output_dir, window)
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Analyze TossingBot training logs')
+    parser = argparse.ArgumentParser(
+        description='Analyze TossingBot training logs',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  # Analyze from log file path
+  %(prog)s --log logs/training_log.jsonl
+  
+  # Custom output directory
+  %(prog)s --log logs/training_log.jsonl --output my_analysis
+  
+  # Adjust smoothing window
+  %(prog)s --log logs/training_log.jsonl --window 100
+
+Note: 
+  For session-based analysis, use session_tools.py instead:
+    python session_tools.py analyze --session <session_id>
+        '''
+    )
     parser.add_argument('--log', type=str, required=True,
                         help='Path to training log file (.jsonl)')
     parser.add_argument('--output', type=str, default=None,
@@ -364,43 +458,9 @@ def main():
     else:
         output_dir = args.output
     
-    os.makedirs(output_dir, exist_ok=True)
-    
-    print(f"\n{'='*60}")
-    print(f"TossingBot Training Analysis")
-    print(f"{'='*60}")
-    print(f"Log file: {args.log}")
-    print(f"Output directory: {output_dir}")
-    print(f"{'='*60}\n")
-    
-    # Load log
-    print("Loading log file...")
-    entries = load_log(args.log)
-    steps = extract_steps(entries)
-    
-    if len(steps) == 0:
-        print("Error: No step data found in log file!")
-        sys.exit(1)
-    
-    print(f"Loaded {len(steps)} training steps\n")
-    
-    # Generate plots
-    print("Generating plots...")
-    plot_success_rate(steps, output_dir, window=args.window)
-    plot_per_object_success(steps, output_dir)
-    plot_loss_curve(steps, output_dir, window=args.window)
-    plot_epsilon_decay(steps, output_dir)
-    plot_confidence_distribution(steps, output_dir)
-    plot_grasp_heatmap(steps, output_dir)
-    plot_rotation_distribution(steps, output_dir)
-    
-    # Generate summary
-    print("\nGenerating summary statistics...")
-    generate_summary_stats(steps, output_dir)
-    
-    print(f"\n{'='*60}")
-    print(f"Analysis complete! Results saved to: {output_dir}")
-    print(f"{'='*60}\n")
+    # Run analysis
+    success = analyze_session_from_path(args.log, output_dir, args.window)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == '__main__':

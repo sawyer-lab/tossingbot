@@ -3,29 +3,32 @@
   <model name='sphere'>
     <link name='link'>
       <inertial>
-        <mass>0.1</mass>
+        <mass>0.2</mass>
         <inertia>
-          <ixx>0.00002</ixx> <ixy>0</ixy> <ixz>0</ixz>
-          <iyy>0.00002</iyy> <iyz>0</iyz>
-          <izz>0.00002</izz>
+          <ixx>0.000025</ixx> <ixy>0</ixy> <ixz>0</ixz>
+          <iyy>0.000025</iyy> <iyz>0</iyz>
+          <izz>0.000025</izz>
         </inertia>
       </inertial>
       <visual name='visual'>
         <geometry>
-          <sphere><radius>0.015</radius></sphere>
+          <sphere><radius>0.0175</radius></sphere>
         </geometry>
         <material><script><name>Gazebo/Red</name></script></material>
       </visual>
       <collision name='collision'>
         <geometry>
-          <sphere><radius>0.015</radius></sphere>
+          <sphere><radius>0.0175</radius></sphere>
         </geometry>
         <surface>
           <friction>
             <ode><mu>100.0</mu><mu2>100.0</mu2></ode>
           </friction>
           <contact>
-            <ode><kp>100000.0</kp><kd>1.0</kd><min_depth>0.001</min_depth></ode>
+            <ode>
+              <kp>100000.0</kp><kd>1.0</kd>
+              <min_depth>0.001</min_depth>
+            </ode>
           </contact>
         </surface>
       </collision>

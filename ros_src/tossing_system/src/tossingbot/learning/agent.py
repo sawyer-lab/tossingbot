@@ -6,6 +6,7 @@ import numpy as np
 import random
 import os
 import cv2
+import pickle
 
 from tossingbot import config as cfg
 from tossingbot.learning.network import TossingBot_Modular
@@ -13,12 +14,14 @@ from tossingbot.learning.buffer import RankBasedReplayBuffer
 from tossingbot.learning.utils import RotationTransformer
 
 class TossingAgent:
-    def __init__(self, load_weights='continue', load_buffer=True):
+    def __init__(self, session, load_buffer=True, load_weights=True):
         """
         Args:
-            load_weights: 'continue' (load latest), 'new' (fresh start), or path to specific checkpoint
+            session: Session object from SessionManager
             load_buffer: whether to load saved replay buffer (default: True)
+            load_weights: whether to load saved weights (default: True)
         """
+        self.session = session
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Model
@@ -31,17 +34,16 @@ class TossingAgent:
         self.buffer = RankBasedReplayBuffer(capacity=cfg.BUFFER_CAPACITY)
         self.transformer = RotationTransformer(device=self.device)
         
-        # Training metadata
-        self.training_start_time = None
-        self.checkpoint_name = None
-                
-        # Load weights based on strategy
-        if load_weights != 'new':
-            self.load_weights(load_weights if load_weights != 'continue' else None)
+        # Load weights if requested
+        if load_weights:
+            self.load_weights()
         
         # Load replay buffer if requested
-        if load_buffer and cfg.SAVE_BUFFER:
+        if load_buffer:
             self.load_buffer()
+        
+        # Save hyperparameters to session
+        self.save_hyperparameters()
 
     def get_action(self, state_tensor, epsilon=0.0, failed_attempts=[]):
         """
@@ -153,105 +155,133 @@ class TossingAgent:
         out = self.model(stack) # [4, 1, H, W]
         return out.permute(1, 0, 2, 3), stack, out # Returns [1, 4, H, W]
 
-    def save_snapshot(self, step):
-        """Save checkpoint with timestamp or custom name"""
+    def save_hyperparameters(self):
+        """Save current hyperparameters to session"""
+        hyperparams = {
+            'learning_rate': cfg.LEARNING_RATE,
+            'momentum': cfg.MOMENTUM,
+            'weight_decay': cfg.WEIGHT_DECAY,
+            'batch_size': cfg.BATCH_SIZE,
+            'buffer_capacity': cfg.BUFFER_CAPACITY,
+            'num_rotations': cfg.NUM_ROTATIONS,
+            'explore_start': cfg.EXPLORE_START,
+            'explore_end': cfg.EXPLORE_END,
+            'explore_steps': cfg.EXPLORE_STEPS,
+            'save_interval': cfg.SAVE_INTERVAL
+        }
+        self.session.save_hyperparameters(hyperparams)
+    
+    def save_snapshot(self, step, success_rate=0.0):
+        """
+        Save checkpoint with session management.
+        
+        Args:
+            step: Current training step
+            success_rate: Current success rate (for best checkpoint tracking)
+        """
         import datetime
-        if not os.path.exists(cfg.WEIGHTS_DIR): 
-            os.makedirs(cfg.WEIGHTS_DIR)
         
         # Generate checkpoint filename
-        if self.checkpoint_name:
-            filename = f"tossingbot_auto_{self.checkpoint_name}_step{step}.pth"
-        else:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"tossingbot_auto_{timestamp}_step{step}.pth"
+        filename = f"checkpoint_step_{step}.pth"
+        checkpoint_path = self.session.get_checkpoint_path(filename)
+        latest_path = self.session.get_checkpoint_path("checkpoint_latest.pth")
         
-        checkpoint_path = os.path.join(cfg.WEIGHTS_DIR, filename)
-        latest_path = os.path.join(cfg.WEIGHTS_DIR, "tossingbot_auto_latest.pth")
-        
-        # Save checkpoint with metadata
+        # Save checkpoint
         checkpoint = {
             'model': self.model.state_dict(),
             'opt': self.optimizer.state_dict(),
             'step': step,
-            'timestamp': datetime.datetime.now().isoformat(),
-            'checkpoint_name': self.checkpoint_name
+            'success_rate': success_rate,
+            'timestamp': datetime.datetime.now().isoformat()
         }
-        
-        if self.training_start_time:
-            checkpoint['training_start_time'] = self.training_start_time
         
         torch.save(checkpoint, checkpoint_path)
         
-        # Create/update symlink to latest
+        # Update latest symlink
         if os.path.exists(latest_path) or os.path.islink(latest_path):
             os.remove(latest_path)
-        os.symlink(os.path.basename(checkpoint_path), latest_path)
+        os.symlink(filename, latest_path)
         
         print(f"Saved checkpoint: {filename}")
         
-        # Save replay buffer if enabled
-        if cfg.SAVE_BUFFER:
-            self.save_buffer()
-
-    def load_weights(self, path=None):
-        """
-        Load model weights from checkpoint.
-        Args:
-            path: Specific checkpoint path, or None to load latest
-        """
-        if path is None:
-            # Try to load latest
-            latest_path = os.path.join(cfg.WEIGHTS_DIR, "tossingbot_auto_latest.pth")
-            if not os.path.exists(latest_path):
-                # Fallback to old naming convention
-                path = cfg.SAVE_PATH
-                if not os.path.exists(path):
-                    print("No existing weights found. Starting with random initialization.")
-                    return
-            else:
-                path = latest_path
+        # Update session metadata
+        checkpoints = self.session.metadata.get('checkpoints', [])
+        if filename not in checkpoints:
+            checkpoints.append(filename)
         
-        if not os.path.exists(path):
-            print(f"Warning: Checkpoint not found at {path}. Starting with random initialization.")
+        self.session.update_metadata(
+            total_steps=step,
+            success_rate=success_rate,
+            buffer_size=len(self.buffer),
+            checkpoints=checkpoints
+        )
+        
+        # Track best checkpoint
+        best = self.session.metadata.get('best_checkpoint')
+        if best is None or success_rate > best.get('success_rate', 0):
+            # Save as best checkpoint
+            best_path = self.session.get_checkpoint_path("checkpoint_best.pth")
+            torch.save(checkpoint, best_path)
+            
+            self.session.update_metadata(
+                best_checkpoint={
+                    'file': filename,
+                    'success_rate': success_rate,
+                    'step': step,
+                    'timestamp': checkpoint['timestamp']
+                }
+            )
+            print(f"New best checkpoint! Success rate: {success_rate*100:.1f}%")
+        
+        # Save replay buffer
+        self.save_buffer()
+
+    def load_weights(self, checkpoint_name="checkpoint_latest.pth"):
+        """
+        Load model weights from session checkpoint directory.
+        
+        Args:
+            checkpoint_name: Name of checkpoint file to load
+        """
+        checkpoint_path = self.session.get_checkpoint_path(checkpoint_name)
+        
+        if not os.path.exists(checkpoint_path):
+            print(f"No checkpoint found at: {checkpoint_path}")
+            print("Starting with random initialization.")
             return
         
         try:
-            ckpt = torch.load(path, map_location=self.device)
+            ckpt = torch.load(checkpoint_path, map_location=self.device)
             self.model.load_state_dict(ckpt['model'])
             self.optimizer.load_state_dict(ckpt['opt'])
             
-            # Load metadata if available
-            if 'checkpoint_name' in ckpt and ckpt['checkpoint_name']:
-                self.checkpoint_name = ckpt['checkpoint_name']
-            if 'training_start_time' in ckpt:
-                self.training_start_time = ckpt['training_start_time']
-            
             step_info = f" (step {ckpt['step']})" if 'step' in ckpt else ""
-            print(f"Loaded weights from: {os.path.basename(path)}{step_info}")
+            success_info = f" [{ckpt['success_rate']*100:.1f}% success]" if 'success_rate' in ckpt else ""
+            print(f"Loaded weights: {checkpoint_name}{step_info}{success_info}")
         except Exception as e:
             print(f"Error loading checkpoint: {e}")
             print("Starting with random initialization.")
     
     def save_buffer(self):
-        """Save replay buffer to disk"""
+        """Save replay buffer to session"""
+        buffer_path = self.session.get_buffer_path()
         try:
-            import pickle
-            with open(cfg.BUFFER_PATH, 'wb') as f:
+            with open(buffer_path, 'wb') as f:
                 pickle.dump(self.buffer, f)
             print(f"Saved replay buffer ({len(self.buffer)} experiences)")
         except Exception as e:
             print(f"Warning: Could not save replay buffer: {e}")
     
     def load_buffer(self):
-        """Load replay buffer from disk"""
-        if not os.path.exists(cfg.BUFFER_PATH):
+        """Load replay buffer from session"""
+        buffer_path = self.session.get_buffer_path()
+        
+        if not os.path.exists(buffer_path):
             print("No saved replay buffer found. Starting with empty buffer.")
             return
         
         try:
-            import pickle
-            with open(cfg.BUFFER_PATH, 'rb') as f:
+            with open(buffer_path, 'rb') as f:
                 self.buffer = pickle.load(f)
             print(f"Loaded replay buffer ({len(self.buffer)} experiences)")
         except Exception as e:

@@ -7,16 +7,12 @@ _CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 # Go up 2 levels to: .../ros_src/tossing_system
 PACKAGE_ROOT = os.path.abspath(os.path.join(_CONFIG_DIR, "../../"))
 
-# Weights folder is in tossing_system/weights
-WEIGHTS_DIR = os.path.join(PACKAGE_ROOT, "weights")
-SAVE_PATH = os.path.join(WEIGHTS_DIR, "tossingbot_auto.pth")  # Legacy path for backward compatibility
-BUFFER_PATH = os.path.join(WEIGHTS_DIR, "tossingbot_auto_buffer.pkl")  # Replay buffer (optional)
+# Session Management
+SESSION_BASE_DIR = os.path.join(PACKAGE_ROOT, "sessions")
 
-# Logging
-LOGS_DIR = os.path.join(PACKAGE_ROOT, "logs")
-
-# Replay Buffer Persistence
-SAVE_BUFFER = True  # Set to False to disable buffer saving (starts fresh each session)
+# Legacy paths (for reference, not used with session system)
+# WEIGHTS_DIR = os.path.join(PACKAGE_ROOT, "weights")
+# LOGS_DIR = os.path.join(PACKAGE_ROOT, "logs")
 
 # Workstation Parameters
 TABLE_HEIGHT = 0.75

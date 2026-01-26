@@ -26,28 +26,95 @@ from tossingbot.environment.tossing_env import TossingEnv
 from tossingbot.learning.agent import TossingAgent
 from tossingbot.learning.utils import RotationTransformer
 from tossingbot.learning.logger import TrainingLogger
+from tossingbot.learning.session_manager import SessionManager
 
 # =============================================================================
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
 DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
-INFERENCE_ONLY = True  # Set to True to disable learning and only do inference
 
 def parse_args():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='TossingBot Auto-Grasp Training')
-    parser.add_argument('--weights', type=str, default='continue',
-                        help='Weight loading strategy: "continue" (load latest), "new" (fresh start), or path to checkpoint')
-    parser.add_argument('--name', type=str, default=None,
-                        help='Custom name for checkpoint files (e.g., "experiment_v2")')
+    parser = argparse.ArgumentParser(
+        description='TossingBot Auto-Grasp Training and Demo System',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Session Workflow:
+  1. Start training with interactive session selection
+  2. Training continues from last checkpoint automatically
+  3. Buffer persists - no loss of experience across restarts
+  4. Analyze results with session_tools.py
+  5. Test models in demo mode
+
+Examples:
+  # Start training (interactive session selection)
+  %(prog)s --mode training
+  
+  # Continue specific session
+  %(prog)s --mode training --session session_baseline_v1
+  
+  # Create new session with empty buffer
+  %(prog)s --mode training --no-buffer
+  
+  # Demo a trained model (interactive selection)
+  %(prog)s --mode demo
+  
+  # Demo specific session
+  %(prog)s --mode demo --session session_baseline_v1
+  
+  # List all sessions
+  %(prog)s --list
+  
+  # Debug mode (step-by-step with visualization)
+  %(prog)s --mode training --debug
+
+Analysis & Visualization:
+  Use session_tools.py for analysis and visualization:
+  
+    # List sessions
+    python session_tools.py list
+    
+    # Analyze session
+    python session_tools.py analyze --session <session_id>
+    
+    # Visualize grasps
+    python session_tools.py visualize --session <session_id>
+    
+    # Compare experiments
+    python session_tools.py compare --sessions <id1> <id2>
+    
+    # Get session info
+    python session_tools.py info --session <session_id>
+
+Key Features:
+  - Sessions persist automatically (checkpoints + replay buffer)
+  - Best checkpoint tracked by success rate
+  - Each session is completely isolated
+  - Demo mode uses best checkpoint by default
+  - Step and episode counts continue from previous runs
+  - Full metadata tracking (dates, hyperparameters, stats)
+
+Tips:
+  - Buffer persistence fixes the "slow learning on restart" issue
+  - Use --no-buffer only if you want to start experience from scratch
+  - Demo mode is inference-only (epsilon=0.0, no training)
+  - Check session_tools.py --help for analysis options
+        '''
+    )
+    parser.add_argument('--mode', type=str, default='training', choices=['training', 'demo'],
+                        help='Mode: training (learn) or demo (inference only)')
+    parser.add_argument('--session', type=str, default=None,
+                        help='Session ID to load (skip interactive selection)')
+    parser.add_argument('--no-buffer', action='store_true',
+                        help='Start with empty replay buffer (training mode only)')
+    parser.add_argument('--list', action='store_true',
+                        help='List available sessions and exit')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug mode with visual confirmation')
-    parser.add_argument('--inference', action='store_true',
-                        help='Inference only mode (no training)')
     return parser.parse_args()
 
-def get_epsilon(step):
-    if INFERENCE_ONLY: return 0.0
+def get_epsilon(step, inference_only):
+    if inference_only: return 0.0
     if step >= cfg.EXPLORE_STEPS: return cfg.EXPLORE_END
     frac = float(step) / cfg.EXPLORE_STEPS
     return cfg.EXPLORE_START - frac * (cfg.EXPLORE_START - cfg.EXPLORE_END)
@@ -57,49 +124,96 @@ def main():
     args = parse_args()
     
     # Update global flags from args
-    global DEBUG_MODE, INFERENCE_ONLY
+    global DEBUG_MODE
     if args.debug:
         DEBUG_MODE = True
-    if args.inference:
-        INFERENCE_ONLY = True
     
+    # Initialize session manager
+    session_manager = SessionManager(cfg.SESSION_BASE_DIR)
+    
+    # List sessions if requested
+    if args.list:
+        print("\n=== Training Sessions ===")
+        training_sessions = session_manager.list_sessions("training")
+        for session in training_sessions:
+            print(f"  - {session}")
+        print("\n=== Demo Sessions ===")
+        demo_sessions = session_manager.list_sessions("demo")
+        for session in demo_sessions:
+            print(f"  - {session}")
+        return
+    
+    # Select or load session
+    if args.session:
+        session = session_manager.load_session(args.session, args.mode)
+        if session is None:
+            print(f"Error: Could not load session {args.session}")
+            return
+    else:
+        if args.mode == "demo":
+            # Demo mode returns (demo_session, training_session)
+            result = session_manager.select_session_interactive("demo")
+            if isinstance(result, tuple):
+                session, training_session = result
+            else:
+                print("Error: Could not select session")
+                return
+        else:
+            session = session_manager.select_session_interactive("training")
+    
+    # Determine if inference only
+    INFERENCE_ONLY = (args.mode == "demo")
+    
+    # Initialize ROS
     rospy.init_node('tossingbot_brain')
     
     # Print configuration
     print("\n" + "="*70)
-    print("TossingBot Auto-Grasp Training")
+    print(f"TossingBot - {args.mode.capitalize()} Mode")
     print("="*70)
-    print(f"Weight Strategy: {args.weights}")
-    if args.name:
-        print(f"Checkpoint Name: {args.name}")
+    print(f"Session: {session.name}")
+    print(f"Session ID: {session.session_id}")
+    print(f"Created: {session.metadata.get('created_at', 'unknown')[:19]}")
+    print(f"Last run: {session.metadata.get('last_run', 'unknown')[:19]}")
+    if not INFERENCE_ONLY:
+        print(f"Total steps: {session.metadata.get('total_steps', 0)}")
+        print(f"Success rate: {session.metadata.get('success_rate', 0.0)*100:.1f}%")
     print(f"Debug Mode: {DEBUG_MODE}")
-    print(f"Inference Only: {INFERENCE_ONLY}")
+    print(f"Training: {not INFERENCE_ONLY}")
     print("="*70 + "\n")
 
-    # 1. Init
+    # 1. Init Environment and Agent
     env = TossingEnv()
-    agent = TossingAgent(load_weights=args.weights)
     
-    # Set custom checkpoint name if provided
-    if args.name:
-        agent.checkpoint_name = args.name
-        agent.training_start_time = agent.training_start_time or rospy.Time.now().to_sec()
+    # In demo mode, load weights from training session
+    if args.mode == "demo":
+        checkpoint_type = session.metadata.get('source_checkpoint', 'best')
+        checkpoint_name = f"checkpoint_{checkpoint_type}.pth"
+        
+        # Create agent with training session for loading weights
+        temp_session = session_manager.load_session(training_session.session_id, "training")
+        agent = TossingAgent(temp_session, load_buffer=False, load_weights=True)
+        # But use demo session for logging
+        session_for_logging = session
+    else:
+        # Training mode
+        load_buf = not args.no_buffer
+        agent = TossingAgent(session, load_buffer=load_buf, load_weights=True)
+        session_for_logging = session
     
     transformer = RotationTransformer() 
     cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Dashboard", 1400, 900)
     
-    # Initialize logger (unless inference only mode)
-    logger = None
-    if not INFERENCE_ONLY:
-        logger = TrainingLogger(cfg.LOGS_DIR, experiment_name=args.name)
+    # Initialize logger
+    logger = TrainingLogger(session_for_logging) if not INFERENCE_ONLY else None
     
     # 2. Reset
     obs, _ = env.reset(force_new=True)
     failed_attempts = [] # Short term memory
     
-    step_count = 0
-    episode_count = 0
+    step_count = session.metadata.get('total_steps', 0)  # Continue from last step
+    episode_count = session.metadata.get('total_episodes', 0)
     episode_steps = 0
     episode_successes = 0
     
@@ -118,7 +232,7 @@ def main():
             continue # Skip action generation for this empty step
 
         # --- A. THINK ---
-        eps = get_epsilon(step_count)
+        eps = get_epsilon(step_count, INFERENCE_ONLY)
         # agent returns the specific rotation index and the pixel IN THAT ROTATED FRAME
         # In DEBUG_MODE, disable failed_attempts inhibition to test all rotations
         fail_list = [] if DEBUG_MODE else failed_attempts
@@ -170,8 +284,11 @@ def main():
         
         # --- E. LEARN ---
         # The original rot_idx is pushed to the buffer
-        agent.buffer.push(obs.cpu(), u_rot, v_rot, rot_idx, reward)
-        loss = agent.train()
+        if not INFERENCE_ONLY:
+            agent.buffer.push(obs.cpu(), u_rot, v_rot, rot_idx, reward)
+            loss = agent.train()
+        else:
+            loss = 0.0
         
         # --- F. LOG ---
         success = (reward > 0.5)
@@ -206,8 +323,9 @@ def main():
             episode_successes += 1
         
         # --- G. SAVE ---
-        if step_count % cfg.SAVE_INTERVAL == 0 and step_count > 0:
-            agent.save_snapshot(step_count)
+        if step_count % cfg.SAVE_INTERVAL == 0 and step_count > 0 and not INFERENCE_ONLY:
+            success_rate = logger.get_current_success_rate() if logger else 0.0
+            agent.save_snapshot(step_count, success_rate)
             if logger:
                 logger.flush()  # Flush logs at checkpoint intervals
 

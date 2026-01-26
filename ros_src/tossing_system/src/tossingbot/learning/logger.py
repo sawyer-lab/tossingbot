@@ -11,25 +11,13 @@ from collections import defaultdict
 class TrainingLogger:
     """Logs training steps and episodes for later analysis"""
     
-    def __init__(self, log_dir, experiment_name=None):
+    def __init__(self, session):
         """
         Args:
-            log_dir: Directory to save logs
-            experiment_name: Optional name for this training run
+            session: Session object from SessionManager
         """
-        self.log_dir = log_dir
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        
-        # Generate log filename
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        if experiment_name:
-            self.log_filename = f"training_log_{experiment_name}_{timestamp}.jsonl"
-        else:
-            self.log_filename = f"training_log_{timestamp}.jsonl"
-        
-        self.log_path = os.path.join(log_dir, self.log_filename)
-        self.summary_path = os.path.join(log_dir, f"training_summary_{timestamp}.json")
+        self.session = session
+        self.log_path = session.get_log_path()
         
         # Buffered writing
         self.buffer = []
@@ -37,14 +25,14 @@ class TrainingLogger:
         
         # Statistics tracking
         self.stats = {
-            'total_steps': 0,
-            'total_episodes': 0,
+            'total_steps': session.metadata.get('total_steps', 0),
+            'total_episodes': session.metadata.get('total_episodes', 0),
             'successes': 0,
             'failures': 0,
             'total_reward': 0.0,
             'total_loss': 0.0,
             'per_object_stats': defaultdict(lambda: {'attempts': 0, 'successes': 0}),
-            'start_time': datetime.datetime.now().isoformat(),
+            'session_start_time': datetime.datetime.now().isoformat(),
         }
         
         print(f"Logging to: {self.log_path}")
@@ -138,13 +126,16 @@ class TrainingLogger:
             if obj_stats['attempts'] > 0:
                 obj_stats['success_rate'] = obj_stats['successes'] / obj_stats['attempts']
         
-        self.stats['end_time'] = datetime.datetime.now().isoformat()
+        self.stats['session_end_time'] = datetime.datetime.now().isoformat()
         
-        # Save summary
-        with open(self.summary_path, 'w') as f:
-            json.dumps(self.stats, f, indent=2, default=str)
+        # Update session metadata
+        self.session.update_metadata(
+            total_steps=self.stats['total_steps'],
+            total_episodes=self.stats['total_episodes'],
+            success_rate=self.stats.get('success_rate', 0.0)
+        )
         
-        print(f"\nTraining summary saved to: {self.summary_path}")
+        print(f"\nTraining session complete")
         print(f"Total steps: {self.stats['total_steps']}")
         print(f"Success rate: {self.stats.get('success_rate', 0.0)*100:.2f}%")
     
@@ -152,6 +143,12 @@ class TrainingLogger:
         """Close logger and flush remaining data"""
         self.flush()
         self.save_summary()
+    
+    def get_current_success_rate(self):
+        """Get current success rate for best checkpoint tracking"""
+        if self.stats['total_steps'] > 0:
+            return self.stats['successes'] / self.stats['total_steps']
+        return 0.0
 
 
 def load_training_log(log_path):

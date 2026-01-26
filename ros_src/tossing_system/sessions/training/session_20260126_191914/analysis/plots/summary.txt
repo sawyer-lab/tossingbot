@@ -1,0 +1,39 @@
+============================================================
+TRAINING SUMMARY
+============================================================
+
+Total Steps: 987
+Successes: 512
+Failures: 475
+Overall Success Rate: 51.87%
+
+------------------------------------------------------------
+PER-OBJECT STATISTICS
+------------------------------------------------------------
+
+I_shape:
+  Attempts: 169
+  Successes: 169
+  Success Rate: 100.00%
+
+L_shape:
+  Attempts: 172
+  Successes: 172
+  Success Rate: 100.00%
+
+T_shape:
+  Attempts: 171
+  Successes: 171
+  Success Rate: 100.00%
+
+------------------------------------------------------------
+EXPLORATION STATISTICS
+------------------------------------------------------------
+Exploration actions: 298 (30.2%)
+Exploitation actions: 689 (69.8%)
+
+------------------------------------------------------------
+NETWORK CONFIDENCE
+------------------------------------------------------------
+Average confidence: 0.6770
+
