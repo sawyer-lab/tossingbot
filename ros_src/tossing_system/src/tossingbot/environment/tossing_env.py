@@ -19,12 +19,24 @@ from tossingbot.environment.health_monitor import HealthMonitor
 from tossingbot.tossing.motion_planner import TossingPlanner
 
 class SimInterface:
-    def __init__(self):
+    def __init__(self, allowed_objects=None):
+        """
+        Args:
+            allowed_objects: List of object names to spawn (REQUIRED in practice)
+        """
         rospy.wait_for_service('/gazebo/set_model_state')
         self.set_state_srv = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
         self.get_state_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
-        self.object_names = ['I_shape', 'L_shape', 'T_shape']
-        # self.object_names = ['bar' , 'cross', 'cylinder']
+        
+        # Use provided objects or fallback to config default
+        if allowed_objects is None:
+            rospy.logwarn("No objects specified! Using default from config.")
+            self.object_names = cfg.DEFAULT_TRAIN_OBJECTS or ['I_shape', 'L_shape', 'T_shape']
+        else:
+            self.object_names = allowed_objects
+        
+        rospy.loginfo(f"SimInterface initialized with objects: {self.object_names}")
+        
         self.anchor_poses = {}
         self.picked_objects = set()  # Track which objects have been picked
         
@@ -165,7 +177,11 @@ class SimInterface:
         return poses
 
 class TossingEnv:
-    def __init__(self):
+    def __init__(self, allowed_objects=None):
+        """
+        Args:
+            allowed_objects: List of object names to spawn (default: None for default set)
+        """
         if rospy.get_node_uri() is None: rospy.init_node('tossing_env')
         
         # Health Monitoring
@@ -176,7 +192,7 @@ class TossingEnv:
         self.vision = VisionProcessor()
         self.robot = SawyerInterface()
         self.gripper = GripperInterface()
-        self.sim = SimInterface()
+        self.sim = SimInterface(allowed_objects=allowed_objects)  # Pass allowed_objects
         
         # Planning
         rp = rospkg.RosPack()
@@ -290,15 +306,15 @@ class TossingEnv:
 
          
             # # Execute tossing trajectory with gripper release
-            # sol = self.tossing_planner.get_trajectory(1.0)
-            # release_index = sol['index']
-            # dt = 0.01  # From TRAJECTORY_CONFIG
-            # release_time = release_index * dt
+            sol = self.tossing_planner.get_trajectory(1 .0)
+            release_index = sol['index']
+            dt = 0.01  # From TRAJECTORY_CONFIG
+            release_time = release_index * dt
             
-            # rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
+            rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
             
-            # traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
-            # self._execute_trajectory(traj, gripper_release_time=release_time)
+            traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
+            self._execute_trajectory(traj, gripper_release_time=release_time)
 
 
             # E. Wait for physics to settle before checking success

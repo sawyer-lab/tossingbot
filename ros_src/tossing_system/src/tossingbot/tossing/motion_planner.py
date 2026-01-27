@@ -8,7 +8,7 @@ from tossingbot.tossing.plotting import *
 
 class TossingPlanner:
     def __init__(self, profile="express", max_speed = 2.0, angle_deg=45,
-                  q0 = np.array([-1.15, 1.7, 1.5]), xT = np.array([0.825, 0.3, 0.0])):
+                  q0 = None, xT = np.array([0.825, 0.0, 0.0])):
         self.dt = TRAJECTORY_CONFIG["dt"]
         self.w_vel = TRAJECTORY_CONFIG["weights"]["vel"]
         self.w_accel = TRAJECTORY_CONFIG["weights"]["accel"]
@@ -21,7 +21,15 @@ class TossingPlanner:
         self.cache = SimpleTrajectoryCache(clear_on_start=True)
         self.max_speed = max_speed
         self.angle = np.deg2rad(angle_deg)  # radians
-        self.intialConf = q0
+
+        if q0 is None:
+            # Replicate 3r/exec_refactored.py logic:
+            # q0 = inverse_kinematics_3r(np.array([0.175, 0.025, -2.094...]))
+            start_pose = np.array([0.175, 0.025, -2.094395102393195])
+            self.intialConf = self.rk.inverse_kinematics_analytical(start_pose)
+        else:
+            self.intialConf = q0
+
         self.targetPosition = xT
         self.min_duration = 0.7
         self.stop_time = 1.5
@@ -35,14 +43,21 @@ class TossingPlanner:
         
 
         cached_sol = self.cache.load(target_speed)
-        if cached_sol is not None:
+        if cached_sol is not None and "index" in cached_sol:
             print("Using cached solution.")
             return cached_sol
         
         if target_speed == self.max_speed:
             sol = self.solve(self.intialConf, self.targetPosition, target_speed, self.min_duration)
-            self.cache.save(target_speed, sol)
-            return sol
+            
+            index = sol["Q"].shape[1]
+            total_sol = self.append_stop_trajectory(
+                sol["Q"], sol["Qd"], sol["Qdd"]
+            )
+            total_sol["index"] = index
+
+            self.cache.save(target_speed, total_sol)
+            return total_sol
         
         max_sol = self.get_trajectory(self.max_speed)
         initial_sol = self.scale_casadi_solution_taskspace_peak(max_sol, target_speed, dt=self.dt)
@@ -54,7 +69,7 @@ class TossingPlanner:
             refined_solution["Q"], refined_solution["Qd"], refined_solution["Qdd"]
         )
 
-        # self.cache.save(target_speed, total_sol)
+        self.cache.save(target_speed, total_sol)
 
         # plot_joint_trajectories(total_sol)
 

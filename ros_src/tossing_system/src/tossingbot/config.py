@@ -56,3 +56,21 @@ WEIGHT_DECAY = 2e-5
 
 # GRASPING PARAMETERS
 TOTAL_DEG = 180
+
+# ============================================================================
+# OBJECT SET CONFIGURATION (Train/Test Split System)
+# ============================================================================
+
+# All available objects (11 total)
+ALL_OBJECTS = [
+    "L_shape", "I_shape", "T_shape", "C_shape", "cross",
+    "cube", "cylinder", "bar", "sphere", "puck", "bolt"
+]
+
+# Object categories for easy configuration
+COMPLEX_OBJECTS = ["L_shape", "I_shape", "T_shape", "C_shape", "cross"]
+SIMPLE_OBJECTS = ["cube", "cylinder", "bar", "sphere", "puck", "bolt"]
+
+# Default: Use a sensible default if user doesn't specify
+DEFAULT_TRAIN_OBJECTS = ["L_shape", "I_shape", "T_shape"]
+DEFAULT_TEST_OBJECTS = None

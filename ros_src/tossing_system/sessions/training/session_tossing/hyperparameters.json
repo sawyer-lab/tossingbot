@@ -1,0 +1,12 @@
+{
+  "learning_rate": 0.0001,
+  "momentum": 0.9,
+  "weight_decay": 2e-05,
+  "batch_size": 16,
+  "buffer_capacity": 2000,
+  "num_rotations": 4,
+  "explore_start": 0.5,
+  "explore_end": 0.1,
+  "explore_steps": 1000,
+  "save_interval": 50
+}

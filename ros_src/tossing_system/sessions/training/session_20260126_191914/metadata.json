@@ -3,13 +3,13 @@
   "session_name": "session_20260126_191914",
   "mode": "training",
   "created_at": "2026-01-26T19:19:14.426161",
-  "last_run": "2026-01-26T20:52:58.212305",
-  "last_updated": "2026-01-26T20:52:58.212321",
+  "last_run": "2026-01-27T21:44:37.027862",
+  "last_updated": "2026-01-27T21:44:37.027878",
   "status": "active",
   "total_steps": 950,
   "total_episodes": 0,
-  "success_rate": 0.5215562565720294,
-  "buffer_size": 951,
+  "success_rate": 0.0,
+  "buffer_size": 952,
   "checkpoints": [
     "checkpoint_step_50.pth",
     "checkpoint_step_100.pth",
@@ -48,5 +48,10 @@
     "explore_end": 0.1,
     "explore_steps": 1000,
     "save_interval": 50
-  }
+  },
+  "train_objects": [
+    "L_shape",
+    "I_shape",
+    "T_shape"
+  ]
 }

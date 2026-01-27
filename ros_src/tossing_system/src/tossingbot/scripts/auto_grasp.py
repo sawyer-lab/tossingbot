@@ -50,55 +50,34 @@ Examples:
   # Start training (interactive session selection)
   %(prog)s --mode training
   
+  # Train on specific objects
+  %(prog)s --mode training --train-objects L_shape cube cylinder
+  
   # Continue specific session
   %(prog)s --mode training --session session_baseline_v1
   
-  # Create new session with empty buffer
-  %(prog)s --mode training --no-buffer
+  # Evaluation mode: test on different objects
+  %(prog)s --eval-only --session session_baseline --eval-objects puck bolt C_shape
   
   # Demo a trained model (interactive selection)
   %(prog)s --mode demo
   
-  # Demo specific session
-  %(prog)s --mode demo --session session_baseline_v1
-  
   # List all sessions
   %(prog)s --list
-  
-  # Debug mode (step-by-step with visualization)
-  %(prog)s --mode training --debug
 
 Analysis & Visualization:
   Use session_tools.py for analysis and visualization:
   
-    # List sessions
-    python session_tools.py list
-    
     # Analyze session
     python session_tools.py analyze --session <session_id>
     
-    # Visualize grasps
-    python session_tools.py visualize --session <session_id>
-    
     # Compare experiments
     python session_tools.py compare --sessions <id1> <id2>
-    
-    # Get session info
-    python session_tools.py info --session <session_id>
 
-Key Features:
-  - Sessions persist automatically (checkpoints + replay buffer)
-  - Best checkpoint tracked by success rate
-  - Each session is completely isolated
-  - Demo mode uses best checkpoint by default
-  - Step and episode counts continue from previous runs
-  - Full metadata tracking (dates, hyperparameters, stats)
-
-Tips:
-  - Buffer persistence fixes the "slow learning on restart" issue
-  - Use --no-buffer only if you want to start experience from scratch
-  - Demo mode is inference-only (epsilon=0.0, no training)
-  - Check session_tools.py --help for analysis options
+Experiments:
+  Use run_experiment.sh to run complete train/test experiments:
+  
+    ./run_experiment.sh experiments/exp_baseline.yaml
         '''
     )
     parser.add_argument('--mode', type=str, default='training', choices=['training', 'demo'],
@@ -111,6 +90,17 @@ Tips:
                         help='List available sessions and exit')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug mode with visual confirmation')
+    
+    # Train/Test Split Arguments (EXPLICIT OBJECT SPECIFICATION)
+    parser.add_argument('--train-objects', nargs='+', default=None,
+                        help='Objects for training (e.g., --train-objects L_shape cube cylinder)')
+    parser.add_argument('--eval-only', action='store_true',
+                        help='Evaluation mode: inference only, no training')
+    parser.add_argument('--eval-objects', nargs='+', default=None,
+                        help='Objects for evaluation (e.g., --eval-objects puck bolt C_shape)')
+    parser.add_argument('--eval-episodes', type=int, default=100,
+                        help='Number of episodes for evaluation (default: 100)')
+    
     return parser.parse_args()
 
 def get_epsilon(step, inference_only):
@@ -147,8 +137,13 @@ def main():
     if args.session:
         session = session_manager.load_session(args.session, args.mode)
         if session is None:
-            print(f"Error: Could not load session {args.session}")
-            return
+            # If session doesn't exist and we're in training mode, create it
+            if args.mode == "training":
+                print(f"Creating new session: {args.session}")
+                session = session_manager.create_session(args.mode, name=args.session)
+            else:
+                print(f"Error: Could not load session {args.session}")
+                return
     else:
         if args.mode == "demo":
             # Demo mode returns (demo_session, training_session)
@@ -182,8 +177,20 @@ def main():
     print(f"Training: {not INFERENCE_ONLY}")
     print("="*70 + "\n")
 
+    # Determine which objects to use
+    train_objects = args.train_objects if args.train_objects else cfg.DEFAULT_TRAIN_OBJECTS
+    eval_objects = args.eval_objects if args.eval_objects else train_objects
+    
+    # Log object configuration
+    print(f"Objects to use: {', '.join(train_objects if not args.eval_only else eval_objects)}")
+    if args.eval_only and eval_objects != train_objects:
+        print(f"  (Training was on: {', '.join(train_objects)})")
+    print()
+
     # 1. Init Environment and Agent
-    env = TossingEnv()
+    # Use eval_objects if eval-only mode, otherwise use train_objects
+    objects_for_env = eval_objects if args.eval_only else train_objects
+    env = TossingEnv(allowed_objects=objects_for_env)
     
     # In demo mode, load weights from training session
     if args.mode == "demo":
@@ -200,13 +207,20 @@ def main():
         load_buf = not args.no_buffer
         agent = TossingAgent(session, load_buffer=load_buf, load_weights=True)
         session_for_logging = session
+        
+        # Store train/test object configuration in metadata
+        if train_objects:
+            session.metadata['train_objects'] = train_objects
+        if eval_objects and eval_objects != train_objects:
+            session.metadata['test_objects'] = eval_objects
+        session.save_metadata()
     
     transformer = RotationTransformer() 
     cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Dashboard", 1400, 900)
     
-    # Initialize logger
-    logger = TrainingLogger(session_for_logging) if not INFERENCE_ONLY else None
+    # Initialize logger (with train_objects for seen/unseen tracking)
+    logger = TrainingLogger(session_for_logging, train_objects=train_objects) if not INFERENCE_ONLY else None
     
     # 2. Reset
     obs, _ = env.reset(force_new=True)

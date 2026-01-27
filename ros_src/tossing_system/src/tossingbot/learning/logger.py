@@ -11,13 +11,17 @@ from collections import defaultdict
 class TrainingLogger:
     """Logs training steps and episodes for later analysis"""
     
-    def __init__(self, session):
+    def __init__(self, session, train_objects=None):
         """
         Args:
             session: Session object from SessionManager
+            train_objects: List of objects used in training (for seen/unseen tracking)
         """
         self.session = session
         self.log_path = session.get_log_path()
+        
+        # Track training objects for seen/unseen analysis
+        self.train_objects = set(train_objects) if train_objects else None
         
         # Buffered writing
         self.buffer = []
@@ -57,6 +61,12 @@ class TrainingLogger:
         # Add timestamp if not present
         if 'timestamp' not in step_data:
             step_data['timestamp'] = datetime.datetime.now().isoformat()
+        
+        # Add seen/unseen flag if we're tracking training objects
+        if self.train_objects is not None:
+            obj_name = step_data.get('object_name')
+            if obj_name and obj_name != 'unknown':
+                step_data['seen_in_training'] = obj_name in self.train_objects
         
         # Update statistics
         self.stats['total_steps'] += 1
