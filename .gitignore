@@ -190,8 +190,8 @@ cython_debug/
 
 
 # Ignore pkl and pth files
-# *.pkl
-# *.pth
+*.pkl
+*.pth
 
 # Ignore json files
 *.json
