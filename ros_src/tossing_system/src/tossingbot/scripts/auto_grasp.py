@@ -134,7 +134,32 @@ def main():
         return
     
     # Select or load session
-    if args.session:
+    training_session = None  # Track training session for eval mode
+    
+    if args.eval_only:
+        # EVAL MODE: Load training session for weights, create separate eval session for logging
+        if not args.session:
+            print("Error: --session required for evaluation mode")
+            return
+        
+        training_session = session_manager.load_session(args.session, "training")
+        if training_session is None:
+            print(f"Error: Training session not found: {args.session}")
+            return
+        
+        # Create separate eval session (e.g., session_exp_baseline_eval)
+        eval_session_name = f"{args.session}_eval"
+        session = session_manager.create_session("training", name=eval_session_name)
+        
+        # Link to training session in metadata
+        session.metadata['training_session'] = args.session
+        session.metadata['mode'] = 'evaluation'
+        session.save_metadata()
+        
+        print(f"Created evaluation session: {session.session_id}")
+        print(f"Loading weights from: {training_session.session_id}\n")
+        
+    elif args.session:
         session = session_manager.load_session(args.session, args.mode)
         if session is None:
             # If session doesn't exist and we're in training mode, create it
@@ -157,7 +182,7 @@ def main():
             session = session_manager.select_session_interactive("training")
     
     # Determine if inference only
-    INFERENCE_ONLY = (args.mode == "demo")
+    INFERENCE_ONLY = (args.mode == "demo" or args.eval_only)
     
     # Initialize ROS
     rospy.init_node('tossingbot_brain')
@@ -192,8 +217,19 @@ def main():
     objects_for_env = eval_objects if args.eval_only else train_objects
     env = TossingEnv(allowed_objects=objects_for_env)
     
-    # In demo mode, load weights from training session
-    if args.mode == "demo":
+    # Load agent and determine session for logging
+    if args.eval_only:
+        # EVAL MODE: Load weights from training session, log to eval session
+        agent = TossingAgent(training_session, load_buffer=False, load_weights=True)
+        session_for_logging = session
+        
+        # Store eval configuration in metadata
+        session.metadata['eval_objects'] = eval_objects
+        session.metadata['train_objects'] = training_session.metadata.get('train_objects', train_objects)
+        session.save_metadata()
+        
+    elif args.mode == "demo":
+        # DEMO MODE: Similar to eval but different session type
         checkpoint_type = session.metadata.get('source_checkpoint', 'best')
         checkpoint_name = f"checkpoint_{checkpoint_type}.pth"
         
@@ -203,7 +239,7 @@ def main():
         # But use demo session for logging
         session_for_logging = session
     else:
-        # Training mode
+        # TRAINING MODE: Normal operation
         load_buf = not args.no_buffer
         agent = TossingAgent(session, load_buffer=load_buf, load_weights=True)
         session_for_logging = session

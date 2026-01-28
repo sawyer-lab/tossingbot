@@ -74,12 +74,56 @@ OBJECT_DIMENSIONS = {
     },
     
     "cross": {
-        # Two intersecting bars: 0.08 x 0.025 each
-        "width": 0.08,
-        "length": 0.08,
+        # Stem (horizontal): 0.12 x 0.025 at pose (0, 0, 0)
+        # Crossbar (vertical): 0.025 x 0.08 at pose (0.03, 0, 0)
+        "width": 0.12,   # X dimension (stem length)
+        "length": 0.08,  # Y dimension (crossbar length)
         "parts": [
-            {"size": [0.08, 0.025], "pose": [0, 0]},         # horizontal
-            {"size": [0.025, 0.08], "pose": [0, 0]}          # vertical
+            {"size": [0.12, 0.025], "pose": [0, 0]},          # horizontal stem
+            {"size": [0.025, 0.08], "pose": [0.03, 0]}        # vertical crossbar (offset right)
+        ]
+    },
+    
+    "C_shape": {
+        # Spine (vertical): 0.025 x 0.10 at pose (-0.02, 0, 0)
+        # Top arm: 0.06 x 0.025 at pose (0.0225, 0.0375, 0)
+        # Bottom arm: 0.06 x 0.025 at pose (0.0225, -0.0375, 0)
+        "width": 0.08,   # X dimension (-0.02-0.0125 to 0.0225+0.03)
+        "length": 0.10,  # Y dimension (full spine length)
+        "parts": [
+            {"size": [0.025, 0.10], "pose": [-0.02, 0]},           # spine
+            {"size": [0.06, 0.025], "pose": [0.0225, 0.0375]},     # top arm
+            {"size": [0.06, 0.025], "pose": [0.0225, -0.0375]}     # bottom arm
+        ]
+    },
+    
+    "puck": {
+        # Cylinder: radius 0.03, height 0.035
+        "width": 0.06,   # Diameter
+        "length": 0.06,
+        "parts": [
+            {"size": [0.06, 0.06], "pose": [0, 0], "type": "cylinder"}
+        ]
+    },
+    
+    "bolt": {
+        # Three overlapping boxes at different rotations (60 degrees apart)
+        # Each box: 0.025 x 0.045 x 0.08 (viewed from top: 0.025 x 0.045)
+        # Creates hexagonal-ish bolt head in top view
+        # Approximate as circle with diameter ~0.05
+        "width": 0.05,
+        "length": 0.05,
+        "parts": [
+            {"size": [0.05, 0.05], "pose": [0, 0], "type": "circle"}
+        ]
+    },
+    
+    "sphere": {
+        # Radius 0.0175
+        "width": 0.035,
+        "length": 0.035,
+        "parts": [
+            {"size": [0.035, 0.035], "pose": [0, 0], "type": "circle"}
         ]
     }
 }
@@ -90,25 +134,38 @@ def get_object_outline(object_name):
     Get object outline for plotting.
     
     Returns:
-        List of rectangles [(x_min, y_min, width, height), ...]
-        in object-relative coordinates.
+        List of parts: [{'type': 'rect'|'circle', 'data': ...}, ...]
+        For rectangles: data = (x_min, y_min, width, height)
+        For circles: data = (center_x, center_y, radius)
     """
     if object_name not in OBJECT_DIMENSIONS:
         return []
     
     parts = OBJECT_DIMENSIONS[object_name].get("parts", [])
-    rectangles = []
+    outlines = []
     
     for part in parts:
         size = part["size"]
         pose = part["pose"]
+        part_type = part.get("type", "box")
         
-        # Rectangle centered at pose
-        x_min = pose[0] - size[0] / 2
-        y_min = pose[1] - size[1] / 2
-        rectangles.append((x_min, y_min, size[0], size[1]))
+        if part_type in ["cylinder", "circle"]:
+            # Circle/cylinder: size[0] is diameter
+            radius = size[0] / 2
+            outlines.append({
+                'type': 'circle',
+                'data': (pose[0], pose[1], radius)
+            })
+        else:
+            # Rectangle: centered at pose
+            x_min = pose[0] - size[0] / 2
+            y_min = pose[1] - size[1] / 2
+            outlines.append({
+                'type': 'rect',
+                'data': (x_min, y_min, size[0], size[1])
+            })
     
-    return rectangles
+    return outlines
 
 
 def get_object_bounds(object_name):

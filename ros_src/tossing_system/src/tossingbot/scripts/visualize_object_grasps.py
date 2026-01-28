@@ -104,13 +104,22 @@ def plot_object_grasp_distribution(object_name, grasps, output_path):
     fig, ax = plt.subplots(figsize=(10, 10))
     
     # Draw object outline
-    rectangles = object_dimensions.get_object_outline(object_name)
-    for (x_min, y_min, width, height) in rectangles:
-        rect = patches.Rectangle(
-            (x_min, y_min), width, height,
-            linewidth=2, edgecolor='black', facecolor='lightgray', alpha=0.3
-        )
-        ax.add_patch(rect)
+    outlines = object_dimensions.get_object_outline(object_name)
+    for part in outlines:
+        if part['type'] == 'rect':
+            x_min, y_min, width, height = part['data']
+            rect = patches.Rectangle(
+                (x_min, y_min), width, height,
+                linewidth=2, edgecolor='black', facecolor='lightgray', alpha=0.3
+            )
+            ax.add_patch(rect)
+        elif part['type'] == 'circle':
+            center_x, center_y, radius = part['data']
+            circle = patches.Circle(
+                (center_x, center_y), radius,
+                linewidth=2, edgecolor='black', facecolor='lightgray', alpha=0.3
+            )
+            ax.add_patch(circle)
     
     # Plot successful grasp attempts (failures have object_name="unknown")
     if success_x:
@@ -177,13 +186,22 @@ def plot_all_objects_comparison(grasps_by_object, output_path):
         success_y = [g['y'] for g in grasps if g['success']]
         
         # Draw object outline
-        rectangles = object_dimensions.get_object_outline(object_name)
-        for (x_min, y_min, width, height) in rectangles:
-            rect = patches.Rectangle(
-                (x_min, y_min), width, height,
-                linewidth=1.5, edgecolor='black', facecolor='lightgray', alpha=0.3
-            )
-            ax.add_patch(rect)
+        outlines = object_dimensions.get_object_outline(object_name)
+        for part in outlines:
+            if part['type'] == 'rect':
+                x_min, y_min, width, height = part['data']
+                rect = patches.Rectangle(
+                    (x_min, y_min), width, height,
+                    linewidth=1.5, edgecolor='black', facecolor='lightgray', alpha=0.3
+                )
+                ax.add_patch(rect)
+            elif part['type'] == 'circle':
+                center_x, center_y, radius = part['data']
+                circle = patches.Circle(
+                    (center_x, center_y), radius,
+                    linewidth=1.5, edgecolor='black', facecolor='lightgray', alpha=0.3
+                )
+                ax.add_patch(circle)
         
         # Plot successful grasps
         if success_x:

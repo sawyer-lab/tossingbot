@@ -77,6 +77,8 @@ def run_experiment(config, workspace_path="/workspace/src/tossing_system"):
         print("\nTraining stopped by user.")
     
     # Phase 2: Evaluation (if test objects different from train)
+    eval_session_name = f"session_{name}_eval"
+    
     if set(eval_objects) != set(train_objects):
         print(f"\n{'='*70}")
         print("[2/3] EVALUATION PHASE")
@@ -85,12 +87,13 @@ def run_experiment(config, workspace_path="/workspace/src/tossing_system"):
         eval_cmd = [
             'python3.8', os.path.join(workspace_path, 'src/tossingbot/scripts/auto_grasp.py'),
             '--eval-only',
-            '--session', name,
+            '--session', f"session_{name}",  # Pass full session name
             '--eval-objects', *eval_objects,
             '--eval-episodes', str(eval_episodes),
         ]
         
         print(f"Command: {' '.join(eval_cmd)}")
+        print(f"Will create eval session: {eval_session_name}")
         print()
         
         try:
@@ -103,6 +106,7 @@ def run_experiment(config, workspace_path="/workspace/src/tossing_system"):
             return False
     else:
         print(f"\n[2/3] EVALUATION PHASE - SKIPPED (train==test objects)")
+        eval_session_name = f"session_{name}"  # Use training session for report
     
     # Phase 3: Generate Report
     print(f"\n{'='*70}")
@@ -111,7 +115,7 @@ def run_experiment(config, workspace_path="/workspace/src/tossing_system"):
     
     report_cmd = [
         'python3.8', os.path.join(workspace_path, 'src/tossingbot/scripts/evaluate_generalization.py'),
-        '--session', name,
+        '--session', eval_session_name,
     ]
     
     try:

@@ -31,7 +31,7 @@ class SimInterface:
         # Use provided objects or fallback to config default
         if allowed_objects is None:
             rospy.logwarn("No objects specified! Using default from config.")
-            self.object_names = cfg.DEFAULT_TRAIN_OBJECTS or ['I_shape', 'L_shape', 'T_shape']
+            self.object_names = cfg.DEFAULT_TRAIN_OBJECTS or ['cube', 'bar', 'sphere', 'cross']
         else:
             self.object_names = allowed_objects
         
@@ -305,16 +305,16 @@ class TossingEnv:
             self._execute_trajectory(path_up)
 
          
-            # # Execute tossing trajectory with gripper release
-            sol = self.tossing_planner.get_trajectory(1 .0)
-            release_index = sol['index']
-            dt = 0.01  # From TRAJECTORY_CONFIG
-            release_time = release_index * dt
+            # # # Execute tossing trajectory with gripper release
+            # sol = self.tossing_planner.get_trajectory(1 .0)
+            # release_index = sol['index']
+            # dt = 0.01  # From TRAJECTORY_CONFIG
+            # release_time = release_index * dt
             
-            rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
+            # rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
             
-            traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
-            self._execute_trajectory(traj, gripper_release_time=release_time)
+            # traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
+            # self._execute_trajectory(traj, gripper_release_time=release_time)
 
 
             # E. Wait for physics to settle before checking success
