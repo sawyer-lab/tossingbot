@@ -3,7 +3,7 @@ import rospy
 import numpy as np
 import rospkg
 import traceback
-from geometry_msgs.msg import Point, Quaternion
+from geometry_msgs.msg import Point, Quaternion, Pose
 from gazebo_msgs.srv import SetModelState, GetModelState
 from gazebo_msgs.msg import ModelState
 
@@ -17,165 +17,82 @@ from tossingbot.planning.kinematics import CasadiKinematics
 from tossingbot.planning.casadi_planner import CasadiPlanner
 from tossingbot.planning.orientation_helper import RotationPrimitive
 from tossingbot.environment.health_monitor import HealthMonitor
+from tossingbot.environment.gazebo_object_manager import GazeboObjectManager
 from tossingbot.tossing.motion_planner import TossingPlanner
 
 class SimInterface:
     def __init__(self, allowed_objects=None):
-        """
-        Args:
-            allowed_objects: List of object names to spawn (REQUIRED in practice)
-        """
-        rospy.wait_for_service('/gazebo/set_model_state')
-        self.set_state_srv = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
-        self.get_state_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
-        
-        # Use provided objects or fallback to config default
-        if allowed_objects is None:
-            rospy.logwarn("No objects specified! Using default from config.")
-            self.object_names = cfg.DEFAULT_TRAIN_OBJECTS or ['cube', 'bar', 'sphere', 'cross']
-        else:
-            self.object_names = allowed_objects
-        
-        rospy.loginfo(f"SimInterface initialized with objects: {self.object_names}")
-        
+        self.manager = GazeboObjectManager(wait_for_services=True)
+        self.allowed_types = allowed_objects or cfg.DEFAULT_TRAIN_OBJECTS or ['cube', 'bar', 'sphere', 'cross']
+        self.active_objects = []
         self.anchor_poses = {}
-        self.picked_objects = set()  # Track which objects have been picked
+        self.picked_objects = set()
+        rospy.loginfo(f"SimInterface initialized with types: {self.allowed_types}")
         
     def spawn_new_problem(self):
-        """Randomizes object locations with collision avoidance."""
-        self.anchor_poses = {}
-        self.picked_objects = set()  # Reset picked objects tracking
+        self.manager.despawn_all()
+        self.active_objects = []
+        self.picked_objects = set()
         margin = 0.05
-        min_dist = 0.12  # Minimum spacing between objects (12cm)
-        
-        min_x, max_x = cfg.ROI_X[0] + margin, cfg.ROI_X[1] - margin
-        min_y, max_y = cfg.ROI_Y[0] + margin, cfg.ROI_Y[1] - margin
-
-        for obj in self.object_names:
-            valid_pos = False
-            attempts = 0
-            
-            # Rejection Sampling: Try up to 20 times to find a free spot
-            while not valid_pos and attempts < 20:
-                rand_x = np.random.uniform(min_x, max_x)
-                rand_y = np.random.uniform(min_y, max_y)
-                
-                # Check distance against all currently placed objects
-                collision = False
-                for other_obj, pose_data in self.anchor_poses.items():
-                    other_pos = pose_data['pos']
-                    dist = np.sqrt((rand_x - other_pos.x)**2 + (rand_y - other_pos.y)**2)
-                    if dist < min_dist:
-                        collision = True
-                        break
-                
-                if not collision:
-                    valid_pos = True
-                    q = RotationPrimitive.get_random_flat_quaternion()
-                    # Spawn slightly higher (0.85) so they drop naturally
-                    self.anchor_poses[obj] = {
-                        'pos': Point(rand_x, rand_y, 0.75),
-                        'ori': Quaternion(*q)
-                    }
-                attempts += 1
-            
-            if not valid_pos:
-                rospy.logwarn(f"Could not find free space for {obj}, skipping...")
-
-        self._apply_anchor()
+        anchors = self.manager.spawn_randomized(
+            self.allowed_types, 
+            (cfg.ROI_X[0] + margin, cfg.ROI_X[1] - margin),
+            (cfg.ROI_Y[0] + margin, cfg.ROI_Y[1] - margin),
+            z_height=cfg.TABLE_HEIGHT + 0.10 # Spawn relative to world ground? No, config.py ROI_Z is robot frame.
+        )
+        # Note: GazeboObjectManager.spawn uses 'world' frame for spawning.
+        # But anchors returned are world poses.
+        self.anchor_poses = {}
+        for name, data in anchors.items():
+            self.active_objects.append(name)
+            self.anchor_poses[name] = {'pos': data['pose'].position, 'ori': data['pose'].orientation, 'folder': data['folder']}
+        rospy.sleep(2.0)
 
     def reset_to_anchor(self):
-        if not self.anchor_poses: self.spawn_new_problem()
-        else: self._apply_anchor()
-
-    def _apply_anchor(self):
-        # 1. Teleport objects (except already picked ones)
-        for obj, pose in self.anchor_poses.items():
-            if obj in self.picked_objects:
-                continue  # Skip already picked objects
-            msg = ModelState()
-            msg.model_name = obj
-            msg.reference_frame = "world"
-            msg.pose.position = pose['pos']
-            msg.pose.orientation = pose['ori']
-            
-            # Kill momentum so they don't fly away
-            msg.twist.linear.x = 0; msg.twist.linear.y = 0; msg.twist.linear.z = 0
-            msg.twist.angular.x = 0; msg.twist.angular.y = 0; msg.twist.angular.z = 0
-            
-            try: self.set_state_srv(msg)
-            except rospy.ServiceException: pass
-            
-        # 2. WAIT for physics to settle (Increased sleep)
-        # 2.0 seconds is usually enough for objects to fall and stop jittering
-        rospy.loginfo("Waiting for simulation to settle...")
-        # rospy.sleep(2.0)
+        if not self.active_objects: 
+            self.spawn_new_problem()
+            return
+        for name, data in self.anchor_poses.items():
+            if name not in self.picked_objects:
+                pose = Pose(position=data['pos'], orientation=data['ori'])
+                if not self.manager.is_spawned(name):
+                    self.manager.spawn(data['folder'], model_name=name, pose=pose)
+                else:
+                    self.manager.set_pose(name, pose)
+        rospy.sleep(2.0)
 
     def check_success(self):
-        """
-        Checks if any object was successfully picked.
-        Returns: (success: bool, picked_object: str or None)
-        """
-        for obj in self.object_names:
-            if obj in self.picked_objects:
-                continue  # Skip already picked objects
-            try:
-                resp = self.get_state_srv(obj, "world")
-                # Check if lifted above table surface
-                # TABLE_HEIGHT = 0.75, we lift by SAFE_LIFT_HEIGHT = 0.15
-                # So successful grasp should be at least 0.75 + 0.10 = 0.85m
-                if resp.pose.position.z > cfg.TABLE_HEIGHT + 0.10:
-                    self.picked_objects.add(obj)
-                    rospy.loginfo(f"PICKED: {obj} ({len(self.picked_objects)}/{len(self.anchor_poses)})")
-                    return True, obj
-            except: pass
+        for obj in self.active_objects:
+            if obj in self.picked_objects: continue
+            pose = self.manager.get_pose(obj)
+            if pose and pose.position.z > cfg.TABLE_HEIGHT + 0.10:
+                self.picked_objects.add(obj)
+                rospy.loginfo(f"PICKED: {obj} ({len(self.picked_objects)}/{len(self.active_objects)})")
+                return True, obj
         return False, None
     
     def remove_picked_object(self, obj_name):
-        """Teleport picked object far away (out of workspace)."""
-        msg = ModelState()
-        msg.model_name = obj_name
-        msg.reference_frame = "world"
-        msg.pose.position = Point(5.0, 5.0, 5.0)  # Far away
-        msg.pose.orientation = Quaternion(0, 0, 0, 1)
-        msg.twist.linear.x = 0; msg.twist.linear.y = 0; msg.twist.linear.z = 0
-        msg.twist.angular.x = 0; msg.twist.angular.y = 0; msg.twist.angular.z = 0
-        try:
-            self.set_state_srv(msg)
-        except rospy.ServiceException:
-            pass
+        self.manager.despawn(obj_name)
     
     def all_objects_picked(self):
-        """Check if all objects in the scene have been picked."""
-        return len(self.picked_objects) >= len(self.anchor_poses)
+        return len(self.picked_objects) >= len(self.active_objects) if self.active_objects else True
     
     def get_object_poses(self):
-        """
-        Get current poses of all objects in the scene.
-        Returns: dict mapping object_name -> {'position': [x,y,z], 'orientation': [x,y,z,w]}
-        """
         poses = {}
-        for obj_name in self.object_names:
-            if obj_name in self.picked_objects:
-                continue  # Skip already picked objects
-            try:
-                resp = self.get_state_srv(obj_name, "world")
+        for obj_name in self.active_objects:
+            if obj_name in self.picked_objects: continue
+            p = self.manager.get_pose(obj_name)
+            if p:
                 poses[obj_name] = {
-                    'position': [
-                        resp.pose.position.x,
-                        resp.pose.position.y,
-                        resp.pose.position.z
-                    ],
-                    'orientation': [
-                        resp.pose.orientation.x,
-                        resp.pose.orientation.y,
-                        resp.pose.orientation.z,
-                        resp.pose.orientation.w
-                    ]
+                    'position': [p.position.x, p.position.y, p.position.z],
+                    'orientation': [p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w]
                 }
-            except:
-                pass
         return poses
+
+    @property
+    def object_names(self): return self.active_objects
+    @object_names.setter
+    def object_names(self, val): pass
 
 class TossingEnv:
     def __init__(self, allowed_objects=None):
@@ -319,7 +236,6 @@ class TossingEnv:
             # position before trajectory execution  
             rospy.loginfo(f"Pre-toss position: {self.robot.get_joint_positions()}")
             self.robot.move_to_joint_positions(traj['Q'][0], timeout=2.0)
-            rospy.sleep(5.0)
             # first trajectory position
             start_pos = traj['Q'][0] if isinstance(traj, dict) else traj[0]['position']
             rospy.loginfo(f"Toss start position: {start_pos}")

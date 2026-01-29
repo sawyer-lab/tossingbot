@@ -195,6 +195,7 @@ cython_debug/
 
 # Ignore json files
 *.json
+*.jsonl 
 # Ignore log files
 *.log
 # Ignore zip files
