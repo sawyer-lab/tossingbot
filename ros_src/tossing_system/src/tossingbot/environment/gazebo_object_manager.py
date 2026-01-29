@@ -4,7 +4,7 @@ import rospkg
 import os
 import threading
 import numpy as np
-import tf.transformations as tft
+from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Pose, Point, Quaternion
 from gazebo_msgs.srv import SpawnModel, DeleteModel, GetModelState, SetModelState
 from gazebo_msgs.msg import ModelState, ModelStates
@@ -129,7 +129,8 @@ class GazeboObjectManager:
                         collision = True; break
                 if not collision:
                     valid = True
-                    q = tft.quaternion_from_euler(0, 0, np.random.uniform(0, 2*np.pi))
+                    # q = tft.quaternion_from_euler(0, 0, np.random.uniform(0, 2*np.pi))
+                    q = R.from_euler('XYZ', [0, 0, np.random.uniform(0, 2*np.pi)]).as_quat()
                     pose = Pose(position=Point(rx, ry, z_height), orientation=Quaternion(*q))
                     generated[name] = {'pose': pose, 'folder': folder}
                     with self._lock: self.spawned[name] = {'folder': folder} 

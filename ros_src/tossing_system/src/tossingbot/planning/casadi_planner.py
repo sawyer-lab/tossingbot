@@ -160,7 +160,21 @@ class CasadiPlanner:
     # PUBLIC PLANNING METHODS
     # ==========================================================================
     
-    def plan_joint(self, q_start, q_goal, duration=3.0, speed_ratio=0.5, check_floor=False):
+    def plan_joint(self, q_start, q_goal, duration=None, speed_ratio=0.5, check_floor=False, joint_speed=None):
+        
+        # Calculate duration from speed if not provided
+        if duration is None:
+            if joint_speed is None: joint_speed = 0.5 # Default 0.5 rad/s
+            
+            # Max Joint Displacement
+            max_diff = np.max(np.abs(np.array(q_goal) - np.array(q_start)))
+            
+            # Calculate time (add 0.5s buffer for accel/decel)
+            duration = (max_diff / joint_speed) + 0.5
+            
+            # Safety clamp (min 0.5s)
+            duration = max(duration, 0.5)
+
         opti, Q, V, A, floor_cost = self._setup_problem(duration, q_start, check_floor)
         
         # Velocity Limits scaled by speed_ratio
@@ -188,7 +202,22 @@ class CasadiPlanner:
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)
 
-    def plan_cartesian(self, q_start, target_pos, target_quat=[0,1,0,0], duration=3.0, speed_ratio=0.5, check_floor=False):
+    def plan_cartesian(self, q_start, target_pos, target_quat=[0,1,0,0], duration=None, speed_ratio=0.5, check_floor=False, linear_speed=None):
+        
+        # Calculate duration from speed if not provided
+        if duration is None:
+            if linear_speed is None: linear_speed = 0.2 # Default 0.2 m/s
+            
+            # Cartesian Distance
+            current_pos = np.array(self.model.fk_pos(q_start)).flatten()
+            dist = np.linalg.norm(np.array(target_pos) - current_pos)
+            
+            # Calculate time (add 0.5s buffer for accel/decel)
+            duration = (dist / linear_speed) + 0.5
+            
+            # Safety clamp (min 0.5s to avoid singularities/extreme accels on tiny moves)
+            duration = max(duration, 0.5)
+
         opti, Q, V, A, floor_cost = self._setup_problem(duration, q_start, check_floor)
         
         limit_v = self.cfg.max_vel * np.clip(speed_ratio, 0.05, 1.0)

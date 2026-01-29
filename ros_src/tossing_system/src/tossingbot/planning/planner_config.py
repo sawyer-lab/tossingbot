@@ -8,12 +8,12 @@ class PlannerConfig:
     solver_steps: int = 20  # Back to original
     
     # Weights
-    w_smooth: float = 0.01     
+    w_smooth: float = 1.0      
     w_slack: float  = 10000.0  
     w_track: float  = 10.0     
-    w_goal: float   = 1000.0   # Back to original
-    w_pos: float    = 10000.0  # Back to original
-    w_ori: float    = 10000.0  # Back to original
+    w_goal: float   = 5000.0   
+    w_pos: float    = 5000.0   
+    w_ori: float    = 5000.0   
     w_reg: float    = 0.5      # Back to original - helps prevent weird configurations
     q_natural: np.ndarray = field(default_factory=lambda: np.array(cfg.NEUTRAL_JOINT_POS))
 

@@ -18,6 +18,7 @@ from tossingbot.planning.casadi_planner import CasadiPlanner
 from tossingbot.planning.orientation_helper import RotationPrimitive
 from tossingbot.environment.health_monitor import HealthMonitor
 from tossingbot.environment.gazebo_object_manager import GazeboObjectManager
+from tossingbot.environment.landing_sensor import LandingSensor
 from tossingbot.tossing.motion_planner import TossingPlanner
 
 class SimInterface:
@@ -110,7 +111,8 @@ class TossingEnv:
         self.vision = VisionProcessor()
         self.robot = SawyerInterface()
         self.gripper = GripperInterface()
-        self.sim = SimInterface(allowed_objects=allowed_objects)  # Pass allowed_objects
+        self.sim = SimInterface(allowed_objects=allowed_objects)
+        self.landing_sensor = LandingSensor()
         
         # Planning
         rp = rospkg.RosPack()
@@ -211,7 +213,7 @@ class TossingEnv:
             self.robot.move_to_joint_positions(ik_hover, timeout=2.0)
 
             # B. Down
-            path_down = self.planner.plan_cartesian(self.robot.get_joint_positions(), target_pos, target_quat, duration=1.5)
+            path_down = self.planner.plan_cartesian(self.robot.get_joint_positions(), target_pos, target_quat, duration=None, linear_speed=0.15)
             if not self._execute_trajectory(path_down): return 0.0, None
             
             # C. Grasp
@@ -219,7 +221,7 @@ class TossingEnv:
             rospy.sleep(0.3)
             
             # D. Lift
-            path_up = self.planner.plan_cartesian(self.robot.get_joint_positions(), hover_pos, target_quat, duration=1.5)
+            path_up = self.planner.plan_cartesian(self.robot.get_joint_positions(), hover_pos, target_quat, duration=None, linear_speed=0.25)
             self._execute_trajectory(path_up)
 
          
@@ -236,6 +238,10 @@ class TossingEnv:
             # position before trajectory execution  
             rospy.loginfo(f"Pre-toss position: {self.robot.get_joint_positions()}")
             self.robot.move_to_joint_positions(traj['Q'][0], timeout=2.0)
+            
+            # Start monitoring landing
+            self.landing_sensor.start_listening()
+            
             # first trajectory position
             start_pos = traj['Q'][0] if isinstance(traj, dict) else traj[0]['position']
             rospy.loginfo(f"Toss start position: {start_pos}")
@@ -244,6 +250,13 @@ class TossingEnv:
 
             # E. Wait for physics to settle before checking success
             rospy.sleep(0.3)
+            
+            # Check Landing
+            land_pos, land_obj = self.landing_sensor.get_landing_result(timeout=2.0)
+            if land_pos:
+                rospy.loginfo(f"LANDING DETECTED: {land_obj} at ({land_pos.x:.3f}, {land_pos.y:.3f})")
+            else:
+                rospy.logwarn("No landing detected on target table.")
 
             
             

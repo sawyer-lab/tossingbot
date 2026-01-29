@@ -400,6 +400,95 @@
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
     
+    <model name='landing_table'>
+      <static>1</static>
+      <link name='table_top'>
+        <pose frame=''>1.5 0.0 0.725 0 0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.40 0.50 0.05</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>1</mu>
+                <mu2>1</mu2>
+              </ode>
+            </friction>
+            <contact>
+               <collide_bitmask>65535</collide_bitmask>
+            </contact>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.40 0.50 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Wood</name>
+            </script>
+          </material>
+        </visual>
+        <sensor name='landing_contact' type='contact'>
+          <always_on>true</always_on>
+          <update_rate>100</update_rate>
+          <contact>
+            <collision>collision</collision>
+          </contact>
+          <plugin name='landing_plugin' filename='libgazebo_ros_bumper.so'>
+            <bumperTopicName>landing_table_contact</bumperTopicName>
+            <frameName>world</frameName>
+          </plugin>
+        </sensor>
+      </link>
+      <link name='leg_front_left'>
+        <pose frame=''>1.68 0.22 0.35 0 0 0</pose>
+        <collision name='collision'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material>
+        </visual>
+      </link>
+      <link name='leg_front_right'>
+        <pose frame=''>1.68 -0.22 0.35 0 0 0</pose>
+        <collision name='collision'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material>
+        </visual>
+      </link>
+      <link name='leg_back_left'>
+        <pose frame=''>1.32 0.22 0.35 0 0 0</pose>
+        <collision name='collision'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material>
+        </visual>
+      </link>
+      <link name='leg_back_right'>
+        <pose frame=''>1.32 -0.22 0.35 0 0 0</pose>
+        <collision name='collision'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material>
+        </visual>
+      </link>
+    </model>
+
     <gui fullscreen='0'>
       <camera name='user_camera'>
         <pose frame=''>-0.640686 -1.26574 0.564981 0 0.19964 2.10819</pose>
