@@ -32,6 +32,7 @@ from tossingbot.learning.session_manager import SessionManager
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
 DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
+SHOW_VIZ = False     # Set to False to disable the visual dashboard display
 
 def parse_args():
     """Parse command line arguments"""
@@ -90,6 +91,8 @@ Experiments:
                         help='List available sessions and exit')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug mode with visual confirmation')
+    parser.add_argument('--no-viz', action='store_true',
+                        help='Disable visual dashboard display')
     
     # Train/Test Split Arguments (EXPLICIT OBJECT SPECIFICATION)
     parser.add_argument('--train-objects', nargs='+', default=None,
@@ -114,9 +117,11 @@ def main():
     args = parse_args()
     
     # Update global flags from args
-    global DEBUG_MODE
+    global DEBUG_MODE, SHOW_VIZ
     if args.debug:
         DEBUG_MODE = True
+    if args.no_viz:
+        SHOW_VIZ = False
     
     # Initialize session manager
     session_manager = SessionManager(cfg.SESSION_BASE_DIR)
@@ -252,8 +257,9 @@ def main():
         session.save_metadata()
     
     transformer = RotationTransformer() 
-    cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Dashboard", 1400, 900)
+    if SHOW_VIZ:
+        cv2.namedWindow("Dashboard", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Dashboard", 1400, 900)
     
     # Initialize logger (with train_objects for seen/unseen tracking)
     logger = TrainingLogger(session_for_logging, train_objects=train_objects) if not INFERENCE_ONLY else None
@@ -299,8 +305,9 @@ def main():
 
         # --- C. VISUALIZE (BEFORE ACTING) ---
         # We pass everything needed to draw the full "Thought Process"
-        viz_img = render_dashboard(obs, debug, rot_idx, u_rot, v_rot, u_world, v_world, angle_deg, failed_attempts)
-        cv2.imshow("Dashboard", viz_img)
+        if SHOW_VIZ:
+            viz_img = render_dashboard(obs, debug, rot_idx, u_rot, v_rot, u_world, v_world, angle_deg, failed_attempts)
+            cv2.imshow("Dashboard", viz_img)
         
         # DEBUG_MODE: Wait for user confirmation before executing
         if DEBUG_MODE:
@@ -313,10 +320,19 @@ def main():
             print(f"{'='*70}")
             print("Press ENTER to execute grasp (or 'q' to quit)...")
             
-            key = cv2.waitKey(0)
-            if key == ord('q'):
-                break
-        else:
+            if SHOW_VIZ:
+                key = cv2.waitKey(0)
+                if key == ord('q'):
+                    break
+            else:
+                # Fallback for text-only debug mode
+                try:
+                    res = input()
+                    if res.strip().lower() == 'q':
+                        break
+                except EOFError:
+                    break
+        elif SHOW_VIZ:
             # Normal mode: just brief waitKey for cv2.imshow to update
             cv2.waitKey(1)
 

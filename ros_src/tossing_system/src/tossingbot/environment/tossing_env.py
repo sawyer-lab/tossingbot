@@ -2,6 +2,7 @@
 import rospy
 import numpy as np
 import rospkg
+import traceback
 from geometry_msgs.msg import Point, Quaternion
 from gazebo_msgs.srv import SetModelState, GetModelState
 from gazebo_msgs.msg import ModelState
@@ -306,15 +307,23 @@ class TossingEnv:
 
          
             # # # Execute tossing trajectory with gripper release
-            # sol = self.tossing_planner.get_trajectory(1 .0)
-            # release_index = sol['index']
-            # dt = 0.01  # From TRAJECTORY_CONFIG
-            # release_time = release_index * dt
+            sol = self.tossing_planner.get_trajectory(1.0)
+            release_index = sol['index']
+            dt = 0.01  # From TRAJECTORY_CONFIG
+            release_time = release_index * dt
             
-            # rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
+            rospy.loginfo(f"Executing toss: release at index={release_index}, time={release_time:.3f}s")
             
-            # traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
-            # self._execute_trajectory(traj, gripper_release_time=release_time)
+            traj = self.tossing_planner.map_to_7dof(sol['Q'], sol['Qd'], sol['Qdd'], 0.0)
+
+            # position before trajectory execution  
+            rospy.loginfo(f"Pre-toss position: {self.robot.get_joint_positions()}")
+            self.robot.move_to_joint_positions(traj['Q'][0], timeout=2.0)
+            rospy.sleep(5.0)
+            # first trajectory position
+            start_pos = traj['Q'][0] if isinstance(traj, dict) else traj[0]['position']
+            rospy.loginfo(f"Toss start position: {start_pos}")
+            self._execute_trajectory(traj, gripper_release_time=release_time)
 
 
             # E. Wait for physics to settle before checking success
@@ -347,6 +356,7 @@ class TossingEnv:
             
         except Exception as e:
             rospy.logerr(f"Exception during grasp execution: {e}")
+            rospy.logerr(traceback.format_exc())
             # Cancel any pending gripper release on exception
             self._cancel_gripper_release()
             # Attempt recovery on exception

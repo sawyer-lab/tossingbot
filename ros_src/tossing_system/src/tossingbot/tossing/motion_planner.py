@@ -396,7 +396,7 @@ class TossingPlanner:
         qdd_full = np.zeros((N, 7))
 
         # Map active joints (1, 3, 5) corresponding to planar motion
-        q_full[:, 1] = q_3dof[0] - (np.pi/2)
+        q_full[:, 1] = q_3dof[0]
         q_full[:, 3] = q_3dof[1]
         q_full[:, 5] = q_3dof[2]
         
