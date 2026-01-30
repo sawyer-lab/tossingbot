@@ -169,8 +169,8 @@ class CasadiPlanner:
             # Max Joint Displacement
             max_diff = np.max(np.abs(np.array(q_goal) - np.array(q_start)))
             
-            # Calculate time (add 0.5s buffer for accel/decel)
-            duration = (max_diff / joint_speed) + 0.5
+            # Calculate time (add 0.8s buffer for accel/decel)
+            duration = (max_diff / joint_speed) + 0.8
             
             # Safety clamp (min 0.5s)
             duration = max(duration, 0.5)
@@ -195,9 +195,9 @@ class CasadiPlanner:
             err = Q[:,k] - ref_q
             total_cost += self.cfg.w_track * ca.dot(err, err)
 
-        # 3. Goal Constraint (Soft but strong)
-        err_final = Q[:, -1] - target_q
-        total_cost += self.cfg.w_goal * ca.dot(err_final, err_final)
+        # 3. Goal Constraint (Hard)
+        opti.subject_to(Q[:, -1] == target_q)
+        opti.subject_to(Q[:, 0] == prev_q)
         
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)
@@ -212,8 +212,8 @@ class CasadiPlanner:
             current_pos = np.array(self.model.fk_pos(q_start)).flatten()
             dist = np.linalg.norm(np.array(target_pos) - current_pos)
             
-            # Calculate time (add 0.5s buffer for accel/decel)
-            duration = (dist / linear_speed) + 0.5
+            # Calculate time (add 0.8s buffer for accel/decel)
+            duration = (dist / linear_speed) + 0.8
             
             # Safety clamp (min 0.5s to avoid singularities/extreme accels on tiny moves)
             duration = max(duration, 0.5)
@@ -250,16 +250,19 @@ class CasadiPlanner:
             q_diff = Q[:, k] - self.Q_NATURAL
             total_cost += self.cfg.w_reg * ca.dot(q_diff, q_diff)
 
-        # Final step: Strong constraint to ensure we actually reach the target
+        # Final step: Hard constraint to ensure we actually reach the target
         pos_final = self.model.fk_pos(Q[:, -1])
         rot_final = self.model.fk_rot(Q[:, -1])
         
-        err_pos_final = pos_final - ca.DM(target_pos)
-        total_cost += self.cfg.w_goal * ca.dot(err_pos_final, err_pos_final)
+        # Hard constraint on position
+        opti.subject_to(pos_final == ca.DM(target_pos))
         
+        # Hard constraint on orientation (dot product close to +/- 1)
         dot_prod_final = ca.dot(rot_final, q_target)
-        err_ori_final = 1.0 - (dot_prod_final * dot_prod_final)
-        total_cost += self.cfg.w_goal * err_ori_final
+        opti.subject_to(dot_prod_final * dot_prod_final >= 0.999)
+
+        # Hard constraint on initial position
+        opti.subject_to(Q[:, 0] == ca.DM(q_start))
 
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)

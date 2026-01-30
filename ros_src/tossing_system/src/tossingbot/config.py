@@ -28,7 +28,7 @@ ROI_Z = [-0.25, -0.20]
 # Safety Heights
 GRASP_Z = -0.25       
 SAFE_LIFT_HEIGHT = 0.15
-NEUTRAL_JOINT_POS = [0.0, -1.27, 0.0, 2.06, 0.0, 0.0, 0.0]
+NEUTRAL_JOINT_POS = [0.0, -1.27, 0.0, 2.06, 0.0, 0.0, 1.57]
 
 # Point Cloud Parameters
 VOXEL_SIZE = 0.005 # 5mm per pixel

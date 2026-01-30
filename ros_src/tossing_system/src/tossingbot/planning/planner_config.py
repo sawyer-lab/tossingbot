@@ -14,7 +14,7 @@ class PlannerConfig:
     w_goal: float   = 5000.0   
     w_pos: float    = 5000.0   
     w_ori: float    = 5000.0   
-    w_reg: float    = 0.5      # Back to original - helps prevent weird configurations
+    w_reg: float    = 0.0      # Set to 0.0 for experiment
     q_natural: np.ndarray = field(default_factory=lambda: np.array(cfg.NEUTRAL_JOINT_POS))
 
     # Robot Limits

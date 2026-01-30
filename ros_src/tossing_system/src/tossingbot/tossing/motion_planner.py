@@ -47,38 +47,31 @@ class TossingPlanner:
             print("Using cached solution.")
             return cached_sol
         
-        if target_speed == self.max_speed:
-            sol = self.solve(self.intialConf, self.targetPosition, target_speed, self.min_duration)
-            
-            index = sol["Q"].shape[1]
-            total_sol = self.append_stop_trajectory(
-                sol["Q"], sol["Qd"], sol["Qdd"]
-            )
-            total_sol["index"] = index
-
-            self.cache.save(target_speed, total_sol)
-            return total_sol
+        # ALWAYS SOLVE FRESH (Bypass scaling to fix swinging)
+        # Use min_duration or scale duration based on speed?
+        # For now, keep min_duration or let solve handle it.
+        # Ideally duration should scale: duration = self.min_duration * (self.max_speed / target_speed)
+        # But let's try fixed duration or just rely on solve's N
         
-        max_sol = self.get_trajectory(self.max_speed)
-        initial_sol = self.scale_casadi_solution_taskspace_peak(max_sol, target_speed, dt=self.dt)
-        refined_solution = self.refine_trajectory_for_exact_speed(initial_sol, target_speed)
-
-        index = refined_solution["Q"].shape[1]
-
+        # Simple duration scaling to avoid asking for impossible accel
+        # If 0.7s is for 2.0m/s, then for 1.5m/s we might need more time? 
+        # Actually slower speed = more time usually? No, same path?
+        # Let's use self.min_duration for now.
+        
+        sol = self.solve(self.intialConf, self.targetPosition, target_speed, self.min_duration)
+        
+        index = sol["Q"].shape[1]
         total_sol = self.append_stop_trajectory(
-            refined_solution["Q"], refined_solution["Qd"], refined_solution["Qdd"]
+            sol["Q"], sol["Qd"], sol["Qdd"]
         )
+        total_sol["index"] = index
 
         self.cache.save(target_speed, total_sol)
-
-        # plot_joint_trajectories(total_sol)
-
-        # plot_ee_kinematics(total_sol)
-
-        # animate_3r_trajectory(total_sol, self.dt)
-        total_sol["index"] = index
-        
         return total_sol
+        
+        # --- OLD SCALING LOGIC DISABLED ---
+        # if target_speed == self.max_speed:
+        #    ...
         
 
     def solve(self, start_q, target_pos, target_speed, duration):
@@ -264,9 +257,9 @@ class TossingPlanner:
         return refined_solution
     
 
-    def smooth_stop_segment(self, q_last, qd_last, qdd_last):
+    def smooth_stop_segment(self, q_last, qd_last, qdd_last, q_target=None):
 
-        q_initial = q_last  # Try to return to last position
+        q_initial = q_target if q_target is not None else q_last
        
         N = int(self.stop_time / self.dt)
         n_joints = len(q_last)
@@ -321,24 +314,14 @@ class TossingPlanner:
                 vel_violation = ca.fmax(0, ca.fabs(qd[i,k]) - self.vel_limits[i])
                 cost += 50.0 * ca.sumsqr(vel_violation)
         
-        # 4. SOFT constraint: encourage EE position near origin (task space)
-        for k in range(N):
-            x_k = kinematics["fk"](q[:,k])
-            ee_distance = ca.sumsqr(x_k[0:2])  # Distance from origin
-            cost += 0.1 * ee_distance
-        # Even stronger at final position
-        x_final_pos = kinematics["fk"](q[:,N])
-        cost += 1.0 * ca.sumsqr(x_final_pos[0:2])
-        
-
         opti.minimize(cost)
 
         opti.solver('ipopt', {"print_time": 0}, 
                 {"print_level": 0, "max_iter": 2000, "tol": 1e-6, "acceptable_tol": 1e-4})
         
-        # Set initial guess (linear interpolation towards initial position)
+        # Set initial guess (constant position, decaying velocity/accel)
         for i in range(n_joints):
-            opti.set_initial(q[i,:], np.linspace(q_last[i], q_initial[i], N+1))
+            opti.set_initial(q[i,:], q_last[i])
             opti.set_initial(qd[i,:], np.linspace(qd_last[i], 0, N+1))
             opti.set_initial(qdd[i,:], np.linspace(qdd_last[i], 0, N+1))
         
@@ -368,7 +351,7 @@ class TossingPlanner:
         q_initial = q_full[:,0]  # Get initial configuration from trajectory
 
         q_stop, qd_stop, qdd_stop = self.smooth_stop_segment(
-            q_last, qd_last, qdd_last
+            q_last, qd_last, qdd_last, q_target=q_initial
         )
 
         # Avoid duplicate at junction
@@ -409,7 +392,7 @@ class TossingPlanner:
         qdd_full[:, 5] = qdd_3dof[2]
 
         # Set fixed joints
-        q_full[:, 0] = base_angle_j0
+        q_full[:, 0] = 0.0 # Force X-axis alignment
         q_full[:, 6] = 1.766 # Fixed wrist orientation
 
         return {

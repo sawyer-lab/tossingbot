@@ -57,6 +57,8 @@ def run_routine(name, speeds, robot, gripper, planner):
     
     pick_robot = to_robot_frame(PICK_POS_WORLD)
     place_robot = to_robot_frame(PLACE_POS_WORLD)
+
+    rospy.loginfo(f"DEBUG: Pick Target (Robot Frame): {pick_robot}")
     
     hover_pick = list(pick_robot)
     hover_pick[2] += HOVER_OFFSET
@@ -74,7 +76,15 @@ def run_routine(name, speeds, robot, gripper, planner):
     # 2. Hover Pick
     rospy.loginfo(f"[{name}] Hover Pick...")
     q_curr = robot.get_joint_positions()
-    traj = planner.plan_cartesian(q_curr, hover_pick, TARGET_QUAT, duration=None, linear_speed=speeds['fast'])
+    
+    # Compute IK for hover position to allow joint-space move
+    q_hover = planner.compute_inverse_kinematics(q_curr, hover_pick, TARGET_QUAT)
+    if q_hover is not None:
+        traj = planner.plan_joint(q_curr, q_hover, duration=None, joint_speed=speeds['joint'])
+    else:
+        rospy.logwarn(f"[{name}] Hover Pick: IK failed, falling back to Cartesian")
+        traj = planner.plan_cartesian(q_curr, hover_pick, TARGET_QUAT, duration=None, linear_speed=speeds['fast'])
+    
     execute_trajectory(robot, traj)
     
     # 3. Approach
