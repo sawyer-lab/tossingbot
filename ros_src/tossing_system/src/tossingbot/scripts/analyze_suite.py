@@ -61,31 +61,82 @@ def analyze_log(log_path):
         r_vel = traj[idx]['vel']
         r_speed = vels[idx]
         
-        pred_pos, tof, pred_traj_pts = get_ballistic_prediction(r_pos, r_vel)
+    processed = []
+    velocity_profiles = []
+
+    for trial in data:
+        if not trial['landing']['success'] or not trial['trajectory']: continue
+        
+        traj = trial['trajectory']
+        
+        # Determine Release Index
+        # Newer logs have 'release_idx', older ones don't. Fallback to argmax or middle.
+        if 'release_idx' in trial:
+            rel_idx = trial['release_idx']
+        else:
+            # Fallback: Peak velocity is usually impact, but we want release.
+            # Assuming release is roughly 0.5s before end?
+            # Or just use argmax of velocity as a proxy for "high energy event"
+            vels = np.array([np.linalg.norm(s['vel']) for s in traj])
+            # This is flawed as discussed, but best effort for legacy logs
+            rel_idx = np.argmax(vels) 
+            
+        # Extract Velocity Profile ( Window: -0.1s to +0.2s around release)
+        # 1 step = 0.01s (approx, usually 100Hz recording)
+        start_i = max(0, rel_idx - 10)
+        end_i = min(len(traj), rel_idx + 20)
+        
+        window_vels = []
+        window_times = []
+        t0 = traj[rel_idx]['t']
+        
+        for i in range(start_i, end_i):
+            v_mag = np.linalg.norm(traj[i]['vel'])
+            t_rel = traj[i]['t'] - t0
+            window_vels.append(v_mag)
+            window_times.append(t_rel)
+            
+        velocity_profiles.append({
+            'times': window_times,
+            'vels': window_vels,
+            'cmd_speed': trial['config']['speed']
+        })
+
+        # Use FLIGHT speed (rel_idx + 5) for analysis if available
+        flight_idx = min(rel_idx + 5, len(traj) - 1)
+        
+        r_pos = traj[flight_idx]['pos']
+        r_vel = traj[flight_idx]['vel']
+        r_speed = np.linalg.norm(r_vel)
+        
         real_pos = np.array([trial['landing']['x'], trial['landing']['y']])
         
+        # Physics Prediction (Flight State)
+        pred_pos, _, _ = get_ballistic_prediction(r_pos, r_vel)
+        
+        # Commanded Prediction (recalc)
+        cmd_speed = trial['config']['speed']
+        j0 = np.deg2rad(trial['config']['angle_deg'])
+        vx_p = cmd_speed * np.cos(np.deg2rad(45))
+        vz_p = cmd_speed * np.sin(np.deg2rad(45))
+        px0 = 0.825 * np.cos(j0) - 0.1363 * np.sin(j0)
+        py0 = 0.825 * np.sin(j0) + 0.1363 * np.cos(j0)
+        vx0 = vx_p * np.cos(j0)
+        vy0 = vx_p * np.sin(j0)
+        
+        pred_cmd_pos, _, _ = get_ballistic_prediction([px0, py0, 1.0], [vx0, vy0, vz_p])
+
         # Track data
         item = {
-            'cmd_speed': trial['config']['speed'],
-            'cmd_angle': trial['config']['angle_deg'],
-            'act_speed': r_speed,
-            'actual_vel_vec': r_vel, # Added for side view prediction
+            'cmd_speed': cmd_speed,
+            'act_speed': r_speed, # Flight speed
             'real_pos': real_pos,
             'pred_pos': pred_pos,
+            'pred_cmd_pos': pred_cmd_pos,
             'error_ballistic': np.linalg.norm(real_pos - pred_pos) if pred_pos is not None else 0,
-            'real_traj_pts': np.array([s['pos'] for s in traj[idx:]])
+            'error_commanded': np.linalg.norm(real_pos - pred_cmd_pos) if pred_cmd_pos is not None else 0
         }
         processed.append(item)
-        
-        # Save one sample per unique config for the comparison plot
-        cfg_id = (trial['config']['speed'], trial['config']['angle_deg'])
-        if cfg_id not in configs_seen and len(sample_trajectories) < 10:
-            sample_trajectories.append({
-                'real': item['real_traj_pts'],
-                'pred': pred_traj_pts,
-                'label': f"S:{item['cmd_speed']} A:{item['cmd_angle']}"
-            })
-            configs_seen.add(cfg_id)
 
     if not processed:
         print("No valid trials found.")
@@ -98,9 +149,15 @@ def analyze_log(log_path):
     ax1 = fig.add_subplot(2, 2, 1)
     real_xy = np.array([p['real_pos'] for p in processed])
     ax1.scatter(real_xy[:,0], real_xy[:,1], c='blue', alpha=0.4, label='Actual Landing')
+    
     pred_xy = np.array([p['pred_pos'] for p in processed if p['pred_pos'] is not None])
     if len(pred_xy) > 0:
-        ax1.scatter(pred_xy[:,0], pred_xy[:,1], c='red', marker='x', alpha=0.4, label='Predicted Landing')
+        ax1.scatter(pred_xy[:,0], pred_xy[:,1], c='red', marker='x', alpha=0.4, label='Physics Pred')
+        
+    cmd_xy = np.array([p['pred_cmd_pos'] for p in processed if p['pred_cmd_pos'] is not None])
+    if len(cmd_xy) > 0:
+        ax1.scatter(cmd_xy[:,0], cmd_xy[:,1], c='green', marker='o', facecolors='none', alpha=0.6, label='Commanded Pred')
+        
     ax1.set_title("Top-Down Landing Dispersion")
     ax1.set_xlabel("X (Forward)")
     ax1.set_ylabel("Y (Lateral)")
@@ -108,51 +165,34 @@ def analyze_log(log_path):
     ax1.axis('equal')
     ax1.legend()
 
-    # 2. Velocity Tracking
+    # 2. Release Velocity Profile
     ax2 = fig.add_subplot(2, 2, 2)
-    cmds = [p['cmd_speed'] for p in processed]
-    acts = [p['act_speed'] for p in processed]
-    ax2.scatter(cmds, acts, alpha=0.5)
-    lims = [min(cmds)-0.2, max(cmds)+0.2]
-    ax2.plot(lims, lims, 'r--', label='Ideal')
-    ax2.set_title("Commanded vs. Measured Release Speed")
-    ax2.set_xlabel("Commanded (m/s)")
-    ax2.set_ylabel("Actual (m/s)")
-    ax2.legend()
-
-    # 3. Side View (X-Z Plane) for J0=0
-    ax3 = fig.add_subplot(2, 2, 3)
     colors = plt.cm.viridis(np.linspace(0, 1, 5))
-    speed_color_map = {s: colors[i] for i, s in enumerate(sorted(list(set(cmds))))}
+    speed_map = {s: colors[i] for i, s in enumerate(sorted(list(set([p['cmd_speed'] for p in processed]))))}
     
-    j0_zero_count = 0
-    for st in sample_trajectories:
-        # We can also iterate through all processed data for this plot to see more density
-        pass
+    for vp in velocity_profiles:
+        c = speed_map.get(vp['cmd_speed'], 'blue')
+        ax2.plot(vp['times'], vp['vels'], color=c, alpha=0.3)
         
-    for p in processed:
-        if abs(p['cmd_angle']) < 0.1: # Near zero J0
-            c = speed_color_map.get(p['cmd_speed'], 'blue')
-            # Actual (Dots)
-            ax3.scatter(p['real_traj_pts'][:,0], p['real_traj_pts'][:,2], s=2, color=c, alpha=0.4)
-            # Predicted (Line) - recalculate or use stored if added
-            pred_pos, tof, pred_pts = get_ballistic_prediction(p['real_traj_pts'][0], p['actual_vel_vec'])
-            if pred_pts is not None:
-                ax3.plot(pred_pts[:,0], pred_pts[:,2], color=c, linewidth=2, alpha=0.8)
-            j0_zero_count += 1
-            
-    ax3.set_title(f"Side View (X-Z Plane) for J0=0 ({j0_zero_count} trials)")
-    ax3.set_xlabel("X (Forward) [m]")
-    ax3.set_ylabel("Z (Height) [m]")
-    ax3.grid(True)
-    ax3.set_xlim(0.4, 1.4)
-    ax3.set_ylim(0.6, 1.2) 
+    ax2.axvline(0, color='k', linestyle='--', label='Release Cmd')
+    ax2.set_title("Release Velocity Profile (-0.1s to +0.2s)")
+    ax2.set_xlabel("Time from Release (s)")
+    ax2.set_ylabel("Object Speed (m/s)")
+    ax2.grid(True)
+
+    # 3. Commanded Error Histogram (Control)
+    ax3 = fig.add_subplot(2, 2, 3)
+    err_cmd = [p['error_commanded'] for p in processed]
+    ax3.hist(err_cmd, bins=20, color='orange', alpha=0.7)
+    ax3.set_title("Commanded Prediction Error (Control)")
+    ax3.set_xlabel("Error (m)")
+    ax3.set_ylabel("Frequency")
     
-    # 4. Error Histogram
+    # 4. Ballistic Error Histogram (Physics)
     ax4 = fig.add_subplot(2, 2, 4)
     err_ballistic = [p['error_ballistic'] for p in processed]
     ax4.hist(err_ballistic, bins=20, color='green', alpha=0.7)
-    ax4.set_title("Ballistic Prediction Error Distribution")
+    ax4.set_title("Ballistic Prediction Error (Physics)")
     ax4.set_xlabel("Error (m)")
     ax4.set_ylabel("Frequency")
 
@@ -163,9 +203,15 @@ def analyze_log(log_path):
 
     # Summary Stats
     err_vals = np.array(err_ballistic)
+    cmd_err_vals = np.array(err_cmd)
+    
+    cmds = [p['cmd_speed'] for p in processed]
+    acts = [p['act_speed'] for p in processed]
+
     print("\n--- PERFORMANCE SUMMARY ---")
-    print(f"Mean Speed Bias: {np.mean(np.array(acts) - np.array(cmds)):.3f} m/s")
-    print(f"Mean Ballistic Error: {np.mean(err_vals)*1000:.2f} mm")
+    print(f"Mean Flight Speed Bias: {np.mean(np.array(acts) - np.array(cmds)):.3f} m/s")
+    print(f"Mean Ballistic Error (Physics): {np.mean(err_vals)*1000:.2f} mm")
+    print(f"Mean Commanded Error (Control): {np.mean(cmd_err_vals)*1000:.2f} mm")
     print(f"Std Dev Error: {np.std(err_vals)*1000:.2f} mm")
 
 if __name__ == "__main__":
