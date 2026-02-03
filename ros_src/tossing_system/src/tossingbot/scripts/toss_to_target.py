@@ -4,7 +4,6 @@ import numpy as np
 import rospkg
 import json
 import os
-import time
 from geometry_msgs.msg import Pose, Point, Quaternion
 from tossingbot.hardware.sawyer import SawyerInterface, ControlMode, RobotCommand
 from tossingbot.hardware.gripper import GripperInterface
@@ -16,45 +15,88 @@ from tossingbot.environment.landing_sensor import LandingSensor
 from tossingbot import config as cfg
 from tossingbot.alignment import TargetAlignment
 
-# --- CALIBRATION CONSTANTS (Refined from 8cm undershoot) ---
-G = 9.806
-TABLE_Z = 0.75
-RELEASE_X_EST = 0.68  # Adjusted from 0.71 to 0.68
-RELEASE_Z_EST = 1.11  
-TOSS_ANGLE_RAD = np.deg2rad(45)
-
-# Mapping: Act_Speed = Cmd_Speed + BIAS
-# To fix 8cm undershoot, we set bias to -0.10 (making robot throw harder)
-SPEED_BIAS = -0.10  
-
 # --- CONFIGURATION ---
+G = 9.806
+TOSS_ANGLE_RAD = np.deg2rad(45)
+MIN_CMD_SPEED = 0.5
+MAX_CMD_SPEED = 2.0
+DEFAULT_RELEASE_RADIUS = 0.68
+DEFAULT_RELEASE_HEIGHT = 0.11
 NUM_TARGETS = 5
 X_RANGE = [1.0, 1.3]
 Y_OFFSET_RANGE = [-0.15, 0.15]
 PICK_POS_WORLD = [0.60, cfg.CENTER_Y, 0.760]
-
-def calculate_required_speed(target_x):
-    """
-    Inverts the ballistic equation to find required release speed.
-    """
-    dx = target_x - RELEASE_X_EST
-    dz = RELEASE_Z_EST - TABLE_Z
-    tan = np.tan(TOSS_ANGLE_RAD)
-    cos = np.cos(TOSS_ANGLE_RAD)
-    
-    # v^2 = (g * dx^2) / (2 * cos^2 * (dx * tan + z0 - zt))
-    v_sq = (G * dx**2) / (2 * cos**2 * (dx * tan + dz))
-    v_actual = np.sqrt(v_sq)
-    
-    # Map back to commanded speed
-    # S_act = S_cmd + 0.81 => S_cmd = S_act - 0.81
-    v_cmd = v_actual - SPEED_BIAS
-    return np.clip(v_cmd, 0.5, 2.5), v_actual
+ROBOT_Z_OFFSET = 1.0
 
 def to_robot_frame(world_pos):
     p = list(world_pos)
-    p[2] -= 1.0
+    p[2] -= ROBOT_Z_OFFSET
     return p
+
+def load_latest_suite_log():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, "../../../logs/test_suite")
+    if not os.path.isdir(log_dir):
+        rospy.logwarn(f"Suite log dir not found: {log_dir}")
+        return None, None
+    files = [os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.endswith(".json")]
+    if not files:
+        rospy.logwarn(f"No suite logs found in: {log_dir}")
+        return None, None
+    latest = max(files, key=os.path.getctime)
+    with open(latest, "r") as f:
+        data = json.load(f)
+    return latest, data
+
+def estimate_release_stats(trials):
+    release_positions = []
+    cmd_speeds = []
+    act_speeds = []
+    for trial in trials:
+        traj = trial.get("trajectory")
+        if not traj:
+            continue
+        vels = np.array([np.linalg.norm(s["vel"]) for s in traj])
+        if vels.size == 0:
+            continue
+        idx = int(np.argmax(vels))
+        release_positions.append(traj[idx]["pos"])
+        cmd_speeds.append(trial["config"]["speed"])
+        act_speeds.append(vels[idx])
+    if not release_positions:
+        return None
+    pos = np.array(release_positions, dtype=float)
+    pos[:, 2] -= ROBOT_Z_OFFSET
+    radii = np.linalg.norm(pos[:, :2], axis=1)
+    speed_map = None
+    if len(cmd_speeds) >= 2:
+        coeffs = np.polyfit(cmd_speeds, act_speeds, 1)
+        if coeffs[0] > 0:
+            speed_map = (float(coeffs[0]), float(coeffs[1]))
+    return {
+        "release_radius": float(np.mean(radii)),
+        "release_height": float(np.mean(pos[:, 2])),
+        "speed_map": speed_map,
+        "count": len(release_positions)
+    }
+
+def calculate_required_speed(target_robot, release_radius, release_height, speed_map):
+    target_xy = np.array(target_robot[:2], dtype=float)
+    dist = np.linalg.norm(target_xy)
+    if dist <= 1e-6:
+        rospy.logwarn("Target too close to base for inverse solve.")
+        return None, None
+    release_xy = target_xy / dist * release_radius
+    d_xy = np.linalg.norm(target_xy - release_xy)
+    dz = release_height - target_robot[2]
+    denom = 2.0 * (np.cos(TOSS_ANGLE_RAD) ** 2) * (d_xy * np.tan(TOSS_ANGLE_RAD) + dz)
+    if denom <= 0:
+        rospy.logwarn(f"Inverse solve invalid: denom={denom:.3f}")
+        return None, None
+    v_required = np.sqrt(G * d_xy**2 / denom)
+    a, b = speed_map
+    cmd_speed = (v_required - b) / a
+    return np.clip(cmd_speed, MIN_CMD_SPEED, MAX_CMD_SPEED), v_required
 
 def execute_trajectory(robot, plan_data):
     if not plan_data: return False
@@ -75,19 +117,56 @@ def run_inverse_tossing():
     urdf_path = rp.get_path('grasping') + "/sawyer_model.urdf"
     pick_planner = CasadiPlanner(CasadiKinematics(urdf_path, "base", "right_gripper_tip"))
 
+    log_path, suite_data = load_latest_suite_log()
+    if suite_data:
+        stats = estimate_release_stats(suite_data)
+    else:
+        stats = None
+
+    release_radius = DEFAULT_RELEASE_RADIUS
+    release_height = DEFAULT_RELEASE_HEIGHT
+    speed_map = (1.0, 0.0)
+    if stats:
+        release_radius = stats["release_radius"]
+        release_height = stats["release_height"]
+        if stats["speed_map"]:
+            speed_map = stats["speed_map"]
+        rospy.loginfo(
+            f"Loaded suite log {log_path} with {stats['count']} releases "
+            f"(radius={release_radius:.3f}, height={release_height:.3f}, "
+            f"speed_map=({speed_map[0]:.3f},{speed_map[1]:.3f}))"
+        )
+    else:
+        rospy.logwarn(
+            f"No suite log found; using defaults "
+            f"(radius={release_radius:.3f}, height={release_height:.3f}, "
+            f"speed_map=({speed_map[0]:.3f},{speed_map[1]:.3f}))"
+        )
     results = []
 
     for i in range(NUM_TARGETS):
         # 1. Select Random Target
         tx = np.random.uniform(X_RANGE[0], X_RANGE[1])
         ty = cfg.CENTER_Y + np.random.uniform(Y_OFFSET_RANGE[0], Y_OFFSET_RANGE[1])
+        target_world = [tx, ty, cfg.TABLE_HEIGHT]
+        target_robot = to_robot_frame(target_world)
         
         # 2. Infer Parameters
-        cmd_speed, exp_act_speed = calculate_required_speed(tx)
-        j0_angle = TargetAlignment.get_base_rotation(tx, ty, cfg.CENTER_Y)
+        cmd_speed, v_required = calculate_required_speed(
+            target_robot,
+            release_radius,
+            release_height,
+            speed_map
+        )
+        if cmd_speed is None:
+            continue
+        j0_angle = TargetAlignment.get_base_rotation(target_robot[0], target_robot[1], cfg.CENTER_Y)
         
         rospy.loginfo(f"\n>>> TARGET {i+1}: ({tx:.3f}, {ty:.3f})")
-        rospy.loginfo(f"Inferred: Speed={cmd_speed:.3f} (Exp Act={exp_act_speed:.3f}), J0={np.rad2deg(j0_angle):.2f}deg")
+        rospy.loginfo(
+            f"Inferred: CmdSpeed={cmd_speed:.3f}, "
+            f"RelSpeed={v_required:.3f}, J0={np.rad2deg(j0_angle):.2f}deg"
+        )
 
         # 3. Reset & Pick
         manager.despawn("toss_cube")

@@ -98,11 +98,15 @@ def analyze_log(log_path):
     ax1 = fig.add_subplot(2, 2, 1)
     real_xy = np.array([p['real_pos'] for p in processed])
     ax1.scatter(real_xy[:,0], real_xy[:,1], c='blue', alpha=0.4, label='Actual Landing')
+    pred_xy = np.array([p['pred_pos'] for p in processed if p['pred_pos'] is not None])
+    if len(pred_xy) > 0:
+        ax1.scatter(pred_xy[:,0], pred_xy[:,1], c='red', marker='x', alpha=0.4, label='Predicted Landing')
     ax1.set_title("Top-Down Landing Dispersion")
     ax1.set_xlabel("X (Forward)")
     ax1.set_ylabel("Y (Lateral)")
     ax1.grid(True)
     ax1.axis('equal')
+    ax1.legend()
 
     # 2. Velocity Tracking
     ax2 = fig.add_subplot(2, 2, 2)

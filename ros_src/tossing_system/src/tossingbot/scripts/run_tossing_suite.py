@@ -27,7 +27,7 @@ LOG_FILE = os.path.join(LOG_DIR, f"{SUITE_NAME}_{int(time.time())}.json")
 Y_OFFSETS = [0.0, 0.15, -0.15] 
 SPEEDS = np.linspace(1.0, 2.0, 5).tolist()  # [1.0, 1.25, 1.5, 1.75, 2.0]
 ANGLES_DEG = np.linspace(-8, 8, 5).tolist() # [-8, -4, 0, 4, 8]
-TRIALS_PER_CONFIG = 10
+TRIALS_PER_CONFIG = 1
 
 # Pick Position (Using shifted Y coordinate)
 PICK_POS_WORLD = [0.60, cfg.CENTER_Y, 0.760]
@@ -36,6 +36,32 @@ BIN_CENTER_Z = 0.760
 
 # Test Flags
 SPAWN_BINS = False
+
+# Constants for Ballistic Calc
+G = 9.806
+TABLE_Z = 0.75
+
+def get_ballistic_prediction(release_pos, release_vel):
+    """Calculates landing position based on projectile motion."""
+    x0, y0, z0 = release_pos
+    vx, vy, vz = release_vel
+    
+    # Time to hit table: Solve z0 + vz*t - 0.5*g*t^2 = TABLE_Z
+    # 0.5*G*t^2 - vz*t + (TABLE_Z - z0) = 0
+    a_q = 0.5 * G
+    b_q = -vz
+    c_q = TABLE_Z - z0
+    
+    discriminant = b_q**2 - 4*a_q*c_q
+    if discriminant < 0: return None
+    
+    tof = (vz + np.sqrt(vz**2 + 2*G*(z0 - TABLE_Z))) / G
+    
+    # Calculate landing position
+    land_x = x0 + vx * tof
+    land_y = y0 + vy * tof
+    
+    return np.array([land_x, land_y])
 
 class TrajectoryRecorder:
     def __init__(self, object_name):
@@ -146,7 +172,24 @@ def run_suite():
                 
                 # 1. Reset
                 manager.despawn("toss_cube")
+                manager.despawn("target_marker")
                 manager.spawn("cube", "toss_cube", Pose(Point(*PICK_POS_WORLD), Quaternion(0,0,0,1)))
+                
+                # Pre-toss target marker (Theoretical Goal)
+                j0_angle = np.deg2rad(angle_deg)
+                vx_p = speed * np.cos(np.deg2rad(45))
+                vz_p = speed * np.sin(np.deg2rad(45))
+                
+                # Theoretical state in World Frame (Release X=0.825, Y=0.1363, Z=1.0)
+                px_w = 0.825 * np.cos(j0_angle) - cfg.CENTER_Y * np.sin(j0_angle)
+                py_w = 0.825 * np.sin(j0_angle) + cfg.CENTER_Y * np.cos(j0_angle)
+                vx_w = vx_p * np.cos(j0_angle)
+                vy_w = vx_p * np.sin(j0_angle)
+                
+                pred_theo = get_ballistic_prediction([px_w, py_w, 1.0], [vx_w, vy_w, vz_p])
+                if pred_theo is not None:
+                    manager.spawn("sphere", "target_marker", Pose(Point(pred_theo[0], pred_theo[1], 0.760), Quaternion(0,0,0,1)))
+                
                 rospy.sleep(0.5)
                 
                 # Move to Neutral before every pick to ensure consistent start state
@@ -211,6 +254,31 @@ def run_suite():
                 # 6. Result
                 land_pos, obj_name = sensor.get_landing_result(timeout=6.0)
                 
+                # 6.5 Calculate Ballistic Error
+                # Error = Distance between the math's prediction (based on release state)
+                # and the actual touch-down point on the table.
+                ballistic_error_mm = -1
+                if land_pos and traj_data:
+                    # Find release point (Max Velocity in recorded trajectory)
+                    vels = np.array([np.linalg.norm(s['vel']) for s in traj_data])
+                    idx = np.argmax(vels)
+                    
+                    r_pos = traj_data[idx]['pos']
+                    r_vel = traj_data[idx]['vel']
+                    
+                    pred_pos = get_ballistic_prediction(r_pos, r_vel)
+                    if pred_pos is not None:
+                        real_pos = np.array([land_pos.x, land_pos.y])
+                        ballistic_error_mm = np.linalg.norm(real_pos - pred_pos) * 1000
+                        rospy.loginfo(f"BALLISTIC ERROR: {ballistic_error_mm:.2f} mm")
+                        
+                        # MOVE THE SPHERE to exactly where the ballistic math predicted it would land.
+                        # This allows you to visually verify the ~2cm error.
+                        manager.despawn("target_marker")
+                        manager.spawn("sphere", "target_marker", Pose(Point(pred_pos[0], pred_pos[1], 0.760), Quaternion(0,0,0,1)))
+                    else:
+                         rospy.logwarn("Ballistic prediction failed (discriminant < 0)")
+                
                 result = {
                     "config": {"speed": speed, "angle_deg": angle_deg},
                     "j0_angle": j0_angle,
@@ -220,8 +288,8 @@ def run_suite():
                 full_log.append(result)
                 
                 # Save incrementally
-                with open(LOG_FILE, 'w') as f:
-                    json.dump(full_log, f, indent=2)
+                # with open(LOG_FILE, 'w') as f:
+                #    json.dump(full_log, f, indent=2)
                     
                 # Return to neutral
                 traj = pick_planner.plan_joint(robot.get_joint_positions(), cfg.NEUTRAL_JOINT_POS, joint_speed=1.5)
@@ -229,6 +297,7 @@ def run_suite():
                 rospy.sleep(0.5)
 
     rospy.loginfo(f"SUITE COMPLETE. Saved to {LOG_FILE}")
+    manager.despawn("target_marker")
     if SPAWN_BINS:
         manager.despawn("grid_bins")
 
