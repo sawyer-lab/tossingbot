@@ -27,7 +27,7 @@ LOG_FILE = os.path.join(LOG_DIR, f"{SUITE_NAME}_{int(time.time())}.json")
 Y_OFFSETS = [0.0, 0.15, -0.15] 
 SPEEDS = np.linspace(1.0, 2.0, 5).tolist()  # [1.0, 1.25, 1.5, 1.75, 2.0]
 ANGLES_DEG = np.linspace(-8, 8, 5).tolist() # [-8, -4, 0, 4, 8]
-TRIALS_PER_CONFIG = 5
+TRIALS_PER_CONFIG = 1
 
 # Pick Position (Using shifted Y coordinate)
 PICK_POS_WORLD = [0.60, cfg.CENTER_Y, 0.760]
@@ -229,31 +229,36 @@ def run_suite():
                 sol_7d = tp.map_to_7dof(sol_3d["Q"], sol_3d["Qd"], sol_3d["Qdd"], q_curr[0], q_curr[2], q_curr[4], q_curr[6])
                 
                 # 5. Execute & Record
+                rel_offset = 12
                 sensor.start_listening()
-                traj_data = execute_toss(robot, gripper, sol_7d, sol_3d["index"] - 4, recorder)
+                traj_data = execute_toss(robot, gripper, sol_7d, sol_3d["index"] - rel_offset, recorder)
                 
                 # 6. Result
                 land_pos, obj_name = sensor.get_landing_result(timeout=6.0)
                 
+                # Correct release index based on execution
+                rel_idx = sol_3d["index"] - rel_offset
+                
                 ballistic_error_mm = -1
                 if land_pos and traj_data:
-                    rel_idx = sol_3d["index"] - 4
-                    
                     if rel_idx < len(traj_data):
                         # 1. Gripper Speed (At exact moment of open command)
                         r_vel_grip = traj_data[rel_idx]['vel']
                         grip_speed = np.linalg.norm(r_vel_grip)
 
-                        # 2. Flight Speed (50ms later, once free)
-                        # Ensure we don't go out of bounds
-                        flight_idx = min(rel_idx + 5, len(traj_data) - 1)
+                        # 2. Flight Speed (80ms later, once free)
+                        flight_idx = min(rel_idx + 8, len(traj_data) - 1)
                         r_pos = traj_data[flight_idx]['pos']
                         r_vel = traj_data[flight_idx]['vel']
                         flight_speed = np.linalg.norm(r_vel)
                         
+                        # Calculate Flight Geometry
+                        v_horiz = np.linalg.norm(r_vel[:2])
+                        flight_angle_deg = np.rad2deg(np.arctan2(r_vel[2], v_horiz))
+                        flight_z = r_pos[2]
+                        
                         loss = grip_speed - flight_speed
                         
-                        # Use FLIGHT state for prediction
                         pred_pos = get_ballistic_prediction(r_pos, r_vel)
                         
                         # Commanded Prediction
@@ -263,7 +268,9 @@ def run_suite():
                         py0 = 0.825 * np.sin(j0_angle) + cfg.CENTER_Y * np.cos(j0_angle)
                         vx0 = vx_p * np.cos(j0_angle)
                         vy0 = vx_p * np.sin(j0_angle)
-                        pred_cmd = get_ballistic_prediction([px0, py0, 1.0], [vx0, vy0, vz_p])
+                        
+                        # Using flight_z instead of 1.0 for fairer comparison
+                        pred_cmd = get_ballistic_prediction([px0, py0, flight_z], [vx0, vy0, vz_p])
                         
                         if pred_pos is not None:
                             real_pos = np.array([land_pos.x, land_pos.y])
@@ -274,9 +281,12 @@ def run_suite():
                                 cmd_error_mm = np.linalg.norm(real_pos - pred_cmd) * 1000
                             
                             speed_diff = flight_speed - speed
+                            angle_diff = flight_angle_deg - 45.0
                             
                             rospy.loginfo(f"Grip Speed: {grip_speed:.2f} m/s -> Flight Speed: {flight_speed:.2f} m/s (Loss: {loss:.2f} m/s)")
-                            rospy.loginfo(f"SPEED DIFF (Flight - Cmd): {speed_diff:.3f} m/s")
+                            rospy.loginfo(f"Flight Angle: {flight_angle_deg:.1f} deg (Cmd: 45.0, Diff: {angle_diff:.1f})")
+                            rospy.loginfo(f"Flight Z: {flight_z:.3f} m")
+                            rospy.loginfo(f"SPEED DIFF: {speed_diff:.3f} m/s")
                             rospy.loginfo(f"ACT ERROR (Physics): {ballistic_error_mm:.2f} mm")
                             rospy.loginfo(f"CMD ERROR (Control): {cmd_error_mm:.2f} mm")
                         else:
@@ -287,16 +297,15 @@ def run_suite():
                 result = {
                     "config": {"speed": speed, "angle_deg": angle_deg},
                     "j0_angle": j0_angle,
-                    "release_idx": sol_3d["index"] - 4,
+                    "release_idx": rel_idx,
                     "landing": {"x": land_pos.x if land_pos else None, "y": land_pos.y if land_pos else None, "success": bool(land_pos)},
                     "trajectory": traj_data
                 }
                 full_log.append(result)
                 
-                # Return to neutral
-                traj = pick_planner.plan_joint(robot.get_joint_positions(), cfg.NEUTRAL_JOINT_POS, joint_speed=1.5)
-                execute_trajectory(robot, traj)
-                rospy.sleep(0.5)
+                # Save incrementally
+                with open(LOG_FILE, 'w') as f:
+                   json.dump(full_log, f, indent=2)
 
     rospy.loginfo(f"SUITE COMPLETE. Saved to {LOG_FILE}")
     if SPAWN_BINS:

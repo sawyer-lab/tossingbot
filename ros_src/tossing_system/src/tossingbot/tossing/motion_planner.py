@@ -30,7 +30,11 @@ class TossingPlanner:
         else:
             self.intialConf = q0
 
-        self.targetPosition = xT
+        self.targetPosition = np.array(xT, dtype=float)
+        # Set target orientation (Theta) to match the toss angle
+        # Trying NEGATIVE 45 degrees
+        self.targetPosition[2] = -self.angle
+        
         self.min_duration = 0.7
         self.stop_time = 1.5
 
@@ -103,7 +107,10 @@ class TossingPlanner:
             opti.subject_to(q_next == q_curr + self.dt / 2.0 * (qd_curr + qd_next))
             opti.subject_to(qd_next == qd_curr + self.dt / 2.0 * (qdd_curr + qdd_next))
 
-        opti.subject_to(funcs["fk"](Q[:, -1])[0:2] == target_pos[0:2])
+        # Enforce Position (X,Z) AND Orientation (Theta) to match toss angle
+        # This aligns the gripper with the velocity vector for a clean release
+        opti.subject_to(funcs["fk"](Q[:, -1])[0:3] == target_pos[0:3])
+        
         opti.subject_to(
             (ca.mtimes(funcs["jacobian"](Q[:, -1]), Qd[:, -1])[0:2])
             == target_vel_vector[0:2]
