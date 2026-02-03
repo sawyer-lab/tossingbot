@@ -26,20 +26,11 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 # Make sure your package is sourced
 from grasping.msg import GraspAction, GraspGoal
 from perception_module import PerceptionModule
+from tossingbot import config
 
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-ROI_X = [0.45, 0.7]    
-ROI_Y = [-0.3, 0.3] 
-ROI_Z = [-0.1, 0.5]   
-
-VOXEL_SIZE = 0.005
-GRID_RES = 0.005 
-
-# Dimensions
-IMG_W = int((ROI_X[1] - ROI_X[0]) / GRID_RES)
-IMG_H = int((ROI_Y[1] - ROI_Y[0]) / GRID_RES)
 
 OBJECT_NAME = "banana"
 PUBLISH_DEBUG = True
@@ -118,8 +109,8 @@ class SimInterface:
         state_msg.reference_frame = "world"
         
         # Randomize Position
-        rand_x = np.random.uniform(ROI_X[0]+0.1, ROI_X[1]-0.1)
-        rand_y = np.random.uniform(ROI_Y[0]+0.1, ROI_Y[1]-0.1)
+        rand_x = np.random.uniform(config.ROI_X[0]+0.1, config.ROI_X[1]-0.1)
+        rand_y = np.random.uniform(config.ROI_Y[0]+0.1, config.ROI_Y[1]-0.1)
         
         # 1. Pose
         state_msg.pose.position = Point(rand_x, rand_y, 0.75) # Lower drop height
@@ -240,8 +231,8 @@ if __name__ == "__main__":
     def mouse_callback(event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
             # Map window coords -> grid coords
-            scale_x = IMG_W / 512.0
-            scale_y = IMG_H / 512.0
+            scale_x = config.IMG_W / 512.0
+            scale_y = config.IMG_H / 512.0
             real_v = int(x * scale_x)
             real_u = int(y * scale_y)
             

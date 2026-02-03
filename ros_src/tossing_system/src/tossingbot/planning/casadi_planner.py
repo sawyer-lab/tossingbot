@@ -160,7 +160,7 @@ class CasadiPlanner:
     # PUBLIC PLANNING METHODS
     # ==========================================================================
     
-    def plan_joint(self, q_start, q_goal, duration=None, speed_ratio=0.5, check_floor=False, joint_speed=None):
+    def plan_joint(self, q_start, q_goal, *, duration=None, speed_ratio=0.5, check_floor=False, joint_speed=None):
         
         # Calculate duration from speed if not provided
         if duration is None:
@@ -202,7 +202,7 @@ class CasadiPlanner:
         opti.minimize(total_cost)
         return self._solve_and_extract(opti, Q, V, A, duration, q_start)
 
-    def plan_cartesian(self, q_start, target_pos, target_quat=[0,1,0,0], duration=None, speed_ratio=0.5, check_floor=False, linear_speed=None):
+    def plan_cartesian(self, q_start, target_pos, target_quat=[0,1,0,0], *, duration=None, speed_ratio=0.5, check_floor=False, linear_speed=None):
         
         # Calculate duration from speed if not provided
         if duration is None:

@@ -180,7 +180,7 @@
     <model name='work_table'>
       <static>1</static>
       <link name='table_top'>
-        <pose frame=''>0.60 0.0 0.725 0 0 0</pose>
+        <pose frame=''>0.60 0.1363 0.725 0 0 0</pose>
         <collision name='collision'>
           <geometry>
             <box>
@@ -230,7 +230,7 @@
       </link>
       
       <link name='leg_front_left'>
-        <pose frame=''>0.78 0.22 0.35 0 0 0</pose>
+        <pose frame=''>0.78 0.3563 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -240,7 +240,7 @@
         </visual>
       </link>
       <link name='leg_front_right'>
-        <pose frame=''>0.78 -0.22 0.35 0 0 0</pose>
+        <pose frame=''>0.78 -0.0837 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -250,7 +250,7 @@
         </visual>
       </link>
       <link name='leg_back_left'>
-        <pose frame=''>0.42 0.22 0.35 0 0 0</pose>
+        <pose frame=''>0.42 0.3563 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -260,7 +260,7 @@
         </visual>
       </link>
       <link name='leg_back_right'>
-        <pose frame=''>0.42 -0.22 0.35 0 0 0</pose>
+        <pose frame=''>0.42 -0.0837 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -279,11 +279,11 @@
       </camera>
     </gui>
     
-    <!-- Landing Table (Base) -->
+    <!-- Landing Table -->
     <model name='landing_table'>
       <static>1</static>
       <link name='table_top'>
-        <pose frame=''>1.57 0.0 0.725 0 0 0</pose>
+        <pose frame=''>1.57 0.1363 0.725 0 0 0</pose>
         <collision name='collision'>
           <geometry>
             <box>
@@ -330,7 +330,7 @@
       
       <!-- Legs -->
       <link name='leg_front_left'>
-        <pose frame=''>2.22 0.22 0.35 0 0 0</pose>
+        <pose frame=''>2.22 0.3563 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -340,7 +340,7 @@
         </visual>
       </link>
       <link name='leg_front_right'>
-        <pose frame=''>2.22 -0.22 0.35 0 0 0</pose>
+        <pose frame=''>2.22 -0.0837 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -350,7 +350,7 @@
         </visual>
       </link>
       <link name='leg_back_left'>
-        <pose frame=''>0.92 0.22 0.35 0 0 0</pose>
+        <pose frame=''>0.92 0.3563 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -360,7 +360,7 @@
         </visual>
       </link>
       <link name='leg_back_right'>
-        <pose frame=''>0.92 -0.22 0.35 0 0 0</pose>
+        <pose frame=''>0.92 -0.0837 0.35 0 0 0</pose>
         <collision name='collision'>
           <geometry><box><size>0.04 0.04 0.70</size></box></geometry>
         </collision>
@@ -371,76 +371,6 @@
       </link>
     </model>
 
-    <!-- Landing Bins: Walls on top of Landing Table -->
-    <!-- Table Surface Z=0.75. Wall Height 0.15m. Wall Center Z = 0.75 + 0.075 = 0.825 -->
-    <!-- Table Length: 1.5m (0.82 to 2.32) -->
-    <!-- Bins: 3x0.5m sections -->
-    <!-- Divider positions X: 0.82, 1.32, 1.82, 2.32 -->
-    <model name='landing_bins'>
-      <static>1</static>
-      <!-- Side Walls: Length 0.24m, Centered at X=1.10, Y shifted to 0.15 +/- 0.125, Thickness 0.005m -->
-      <link name='wall_left'>
-        <pose frame=''>1.10 0.275 0.76875 0 0 0</pose>
-        <collision name='collision'>
-          <geometry><box><size>0.24 0.005 0.0375</size></box></geometry>
-        </collision>
-        <visual name='visual'>
-          <geometry><box><size>0.24 0.005 0.0375</size></box></geometry>
-          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Blue</name></script></material>
-        </visual>
-      </link>
-      <link name='wall_right'>
-        <pose frame=''>1.10 0.025 0.76875 0 0 0</pose>
-        <collision name='collision'>
-          <geometry><box><size>0.24 0.005 0.0375</size></box></geometry>
-        </collision>
-        <visual name='visual'>
-          <geometry><box><size>0.24 0.005 0.0375</size></box></geometry>
-          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Blue</name></script></material>
-        </visual>
-      </link>
-      
-      <!-- Dividers @ 0.08m intervals. Width 0.25m. Centered at Y=0.15, Thickness 0.005m -->
-      <link name='div_1'>
-        <pose frame=''>0.98 0.15 0.76875 0 0 0</pose>
-        <collision name='collision'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-        </collision>
-        <visual name='visual'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Red</name></script></material>
-        </visual>
-      </link>
-      <link name='div_2'>
-        <pose frame=''>1.06 0.15 0.76875 0 0 0</pose>
-        <collision name='collision'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-        </collision>
-        <visual name='visual'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Red</name></script></material>
-        </visual>
-      </link>
-      <link name='div_3'>
-        <pose frame=''>1.14 0.15 0.76875 0 0 0</pose>
-        <collision name='collision'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-        </collision>
-        <visual name='visual'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Red</name></script></material>
-        </visual>
-      </link>
-      <link name='div_4'>
-        <pose frame=''>1.22 0.15 0.76875 0 0 0</pose>
-        <collision name='collision'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-        </collision>
-        <visual name='visual'>
-          <geometry><box><size>0.005 0.25 0.0375</size></box></geometry>
-          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Red</name></script></material>
-        </visual>
-      </link>
-    </model>
+
   </world>
 </sdf>

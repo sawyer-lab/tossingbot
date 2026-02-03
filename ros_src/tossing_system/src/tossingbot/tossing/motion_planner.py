@@ -368,10 +368,74 @@ class TossingPlanner:
 
 
     @staticmethod
-    def map_to_7dof(q_3dof, qd_3dof, qdd_3dof, base_angle_j0):
+    def calculate_base_alignment(target_pos_robot_frame, gripper_pos_robot_frame=None, tilt_angle_deg=45):
+        """
+        Calculate the base joint angle (J0) and gripper orientation required to align
+        the gripper's tossing plane with the target position.
+
+        The Sawyer gripper has a Y-offset of 136.3mm when J0=0. By rotating
+        the base, we align the gripper's trajectory plane to point toward
+        the target. Additionally, the gripper is oriented perpendicular to
+        the line connecting it to the target.
+
+        Args:
+            target_pos_robot_frame: [x, y, z] target position in robot frame (meters)
+            gripper_pos_robot_frame: [x, y, z] current gripper position (optional)
+            tilt_angle_deg: Tilt angle for tossing (degrees, default 45)
+
+        Returns:
+            tuple: (j0_angle, orientation_quaternion)
+                - j0_angle: Required base joint angle in radians
+                - orientation_quaternion: [x, y, z, w] quaternion for gripper orientation
+        """
+        from scipy.spatial.transform import Rotation as R
+
+        x_target = target_pos_robot_frame[0]
+        y_target = target_pos_robot_frame[1]
+
+        # Calculate angle to point base toward target
+        j0_angle = np.arctan2(y_target, x_target)
+
+        # Calculate gripper orientation perpendicular to line to target
+        if gripper_pos_robot_frame is not None:
+            # Direction from gripper to target (in XY plane)
+            dx = x_target - gripper_pos_robot_frame[0]
+            dy = y_target - gripper_pos_robot_frame[1]
+            angle_to_target_xy = np.arctan2(dy, dx)
+        else:
+            # Use base angle as approximation
+            angle_to_target_xy = j0_angle
+
+        # Create orientation: rotate around Z to point toward target, then tilt back
+        # 1. Rotate around Z by angle_to_target_xy (align with target in XY)
+        # 2. Rotate around Y by tilt_angle_deg (tilt back for toss)
+        # 3. Base orientation for gripper (vertical grasp = [0,1,0,0])
+
+        r_base = R.from_quat([0, 1, 0, 0])  # Vertical grasp
+        r_z = R.from_euler('z', angle_to_target_xy, degrees=False)
+        r_y = R.from_euler('y', tilt_angle_deg, degrees=True)
+
+        # Combined rotation: first base, then tilt, then align
+        orientation_quat = (r_z * r_y * r_base).as_quat()
+
+        return j0_angle, orientation_quat
+
+    @staticmethod
+    def map_to_7dof(q_3dof, qd_3dof, qdd_3dof, base_angle_j0, j2=0.0, j4=0.0, j6=1.766):
         """
         Maps the 3-DOF planar solution to the 7-DOF robot joints.
-        Returns a dictionary compatible with _execute_trajectory.
+
+        Args:
+            q_3dof: 3-DOF joint positions (3, N) for active joints J1, J3, J5
+            qd_3dof: 3-DOF joint velocities (3, N)
+            qdd_3dof: 3-DOF joint accelerations (3, N)
+            base_angle_j0: Base joint angle (J0) for target alignment
+            j2: Joint 2 position (kept constant during motion)
+            j4: Joint 4 position (kept constant during motion)
+            j6: Joint 6 position (wrist orientation, default 1.766)
+
+        Returns:
+            Dictionary with 'Q', 'Qd', 'Qdd' arrays of shape (N, 7)
         """
         N = q_3dof.shape[1]
         q_full = np.zeros((N, 7))
@@ -382,18 +446,23 @@ class TossingPlanner:
         q_full[:, 1] = q_3dof[0]
         q_full[:, 3] = q_3dof[1]
         q_full[:, 5] = q_3dof[2]
-        
+
         qd_full[:, 1] = qd_3dof[0]
         qd_full[:, 3] = qd_3dof[1]
         qd_full[:, 5] = qd_3dof[2]
-        
+
         qdd_full[:, 1] = qdd_3dof[0]
         qdd_full[:, 3] = qdd_3dof[1]
         qdd_full[:, 5] = qdd_3dof[2]
 
-        # Set fixed joints
-        q_full[:, 0] = 0.0 # Force X-axis alignment
-        q_full[:, 6] = 1.766 # Fixed wrist orientation
+        # Set fixed joints (preserved throughout trajectory)
+        q_full[:, 0] = base_angle_j0  # Base alignment for target
+        q_full[:, 2] = j2             # Keep J2 constant
+        q_full[:, 4] = j4             # Keep J4 constant
+        q_full[:, 6] = j6             # Fixed wrist orientation
+
+        # Velocities and accelerations for fixed joints are zero
+        # (already initialized to zero above)
 
         return {
             'Q': q_full,

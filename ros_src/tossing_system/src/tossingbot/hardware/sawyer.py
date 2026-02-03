@@ -34,8 +34,12 @@ class SawyerInterface:
 
         # State Management
         self._curr_joints = {}
+        self._curr_joint_velocities = {}
+        self._curr_joint_efforts = {}
         self._received_state = False
         self._endpoint_pose = None
+        self._endpoint_velocity = None
+        self._endpoint_effort = None
         self._received_endpoint = False
 
         # Publisher (High Priority TCP)
@@ -76,16 +80,28 @@ class SawyerInterface:
 
     def _cb_joint_states(self, msg: JointState):
         if 'right_j0' in msg.name:
-            temp = dict(zip(msg.name, msg.position))
-            self._curr_joints = {n: temp[n] for n in self._joint_names}
+            temp_pos = dict(zip(msg.name, msg.position))
+            temp_vel = dict(zip(msg.name, msg.velocity))
+            temp_eff = dict(zip(msg.name, msg.effort))
+            self._curr_joints = {n: temp_pos[n] for n in self._joint_names}
+            self._curr_joint_velocities = {n: temp_vel[n] for n in self._joint_names}
+            self._curr_joint_efforts = {n: temp_eff[n] for n in self._joint_names}
             self._received_state = True
     
     def _cb_endpoint_state(self, msg: EndpointState):
-        """Callback for endpoint state - stores current pose"""
+        """Callback for endpoint state - stores current pose, velocity, and effort"""
         self._endpoint_pose = {
             'position': [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z],
-            'orientation': [msg.pose.orientation.x, msg.pose.orientation.y, 
+            'orientation': [msg.pose.orientation.x, msg.pose.orientation.y,
                           msg.pose.orientation.z, msg.pose.orientation.w]
+        }
+        self._endpoint_velocity = {
+            'linear': [msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z],
+            'angular': [msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z]
+        }
+        self._endpoint_effort = {
+            'force': [msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z],
+            'torque': [msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z]
         }
         self._received_endpoint = True
 
@@ -97,11 +113,39 @@ class SawyerInterface:
             or None if not yet received
         """
         return self._endpoint_pose if self._received_endpoint else None
-    
+
+    def get_endpoint_velocity(self) -> Optional[Dict]:
+        """
+        Returns the current end-effector velocity (twist).
+        Returns:
+            dict with 'linear': [vx, vy, vz], 'angular': [wx, wy, wz] in m/s and rad/s
+            or None if not yet received
+        """
+        return self._endpoint_velocity if self._received_endpoint else None
+
+    def get_endpoint_effort(self) -> Optional[Dict]:
+        """
+        Returns the current end-effector effort (wrench).
+        Returns:
+            dict with 'force': [fx, fy, fz], 'torque': [tx, ty, tz] in N and Nm
+            or None if not yet received
+        """
+        return self._endpoint_effort if self._received_endpoint else None
+
     def get_joint_positions(self) -> List[float]:
         """Returns [q0, q1, ... q6] in the correct order."""
         if not self._received_state: return [0.0] * 7
         return [self._curr_joints[n] for n in self._joint_names]
+
+    def get_joint_velocities(self) -> List[float]:
+        """Returns joint velocities [qd0, qd1, ... qd6] in rad/s."""
+        if not self._received_state: return [0.0] * 7
+        return [self._curr_joint_velocities[n] for n in self._joint_names]
+
+    def get_joint_efforts(self) -> List[float]:
+        """Returns joint efforts [tau0, tau1, ... tau6] in Nm."""
+        if not self._received_state: return [0.0] * 7
+        return [self._curr_joint_efforts[n] for n in self._joint_names]
     
     def move_to_joint_positions(self, target_joints: List[float], timeout: float = 1.0):
         """

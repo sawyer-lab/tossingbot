@@ -18,8 +18,9 @@ from scipy.spatial.transform import Rotation as R
 
 # --- CONFIGURATION ---
 ROBOT_Z_OFFSET = 1.0
-PICK_POS_WORLD = [0.60, 0.0, 0.760] # Centered on table, lowered slightly
-TARGET_QUAT = [0, 1, 0, 0] # Vertical grasp
+# Pick position (boxes already shifted in world file to align with gripper offset)
+PICK_POS_WORLD = [0.60, 0.0, 0.760]  # Centered on work table
+TARGET_QUAT = [0, 1, 0, 0]  # Vertical grasp
 LOG_FILE = "toss_results.csv"
 
 def to_robot_frame(world_pos):
@@ -149,31 +150,18 @@ def run_single_toss(target_speed, robot, gripper, pick_planner, manager, sensor)
     traj = pick_planner.plan_cartesian(q_curr, hover_target, TARGET_QUAT, linear_speed=0.1)
     execute_trajectory(robot, traj)
     
-    # 3. Move to Toss Start Position (Task Space Definition)
-    rospy.loginfo("Moving to Toss Start Position (Task Space)...")
-    
-    # Calculate orientation: TARGET_QUAT rotated 45 deg backwards (around Y)
-    # TARGET_QUAT is [0, 1, 0, 0] which is 180 deg around Y.
-    # Backwards 45 deg means rotating around Y by -45 deg.
-    r_target = R.from_quat(TARGET_QUAT)
-    r_rot = R.from_euler('y', 45, degrees=True)
-    toss_start_quat = (r_rot * r_target).as_quat()
+    # 3. Move to Fixed Toss-Ready Position (Maintains 3R Planar Constraint)
+    rospy.loginfo("Moving to Toss-Ready Position...")
 
-    # Define Toss Start in Robot Frame
-    toss_start_pos = list(pick_target)
-    toss_start_pos[2] += 0.20  # Same as hover Z
-    toss_start_pos[0] -= 0.15  # Back up by 15cm
-    
+    # Move to fixed configuration with J2=0, J4=0, J6=1.766
+    # This ensures the robot is in the planar configuration
     q_curr = robot.get_joint_positions()
-    q_toss_start = pick_planner.compute_inverse_kinematics(q_curr, toss_start_pos, toss_start_quat)
-    
-    if q_toss_start:
-        q_toss_start[0] = 0.0 # Force J0 to 0.0 for exact alignment
-        traj = pick_planner.plan_joint(q_curr, q_toss_start, joint_speed=1.5)
-        execute_trajectory(robot, traj)
-    else:
-        rospy.logerr("Toss Start IK Failed!")
-        return None, None, False
+    traj = pick_planner.plan_joint(q_curr, cfg.TOSS_READY_POS, joint_speed=1.5)
+    execute_trajectory(robot, traj)
+
+    # Note: J0=0 points at workspace center (Y=0.1363)
+    # Tossing motion (J1, J3, J5) is independent of target location
+    # Only J0 would need to rotate for different target Y positions
     
     # 4. Plan Toss
     rospy.loginfo("Planning Toss...")

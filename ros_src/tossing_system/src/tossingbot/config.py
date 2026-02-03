@@ -18,7 +18,7 @@ SESSION_BASE_DIR = os.path.join(PACKAGE_ROOT, "sessions")
 TABLE_HEIGHT = 0.75
 WORKSPACE_SIZE = 0.40 
 CENTER_X = 0.60 
-CENTER_Y = 0.0
+CENTER_Y = 0.1363
 
 # Define ROI in Robot Frame
 ROI_X = [CENTER_X - WORKSPACE_SIZE/2, CENTER_X + WORKSPACE_SIZE/2]
@@ -26,9 +26,15 @@ ROI_Y = [CENTER_Y - WORKSPACE_SIZE/2, CENTER_Y + WORKSPACE_SIZE/2]
 ROI_Z = [-0.25, -0.20]
 
 # Safety Heights
-GRASP_Z = -0.25       
+GRASP_Z = -0.25
 SAFE_LIFT_HEIGHT = 0.15
 NEUTRAL_JOINT_POS = [0.0, -1.27, 0.0, 2.06, 0.0, 0.0, 1.57]
+
+# Tossing Configuration
+# Toss-ready position: J0=0 (will be rotated to align with target), J2=0, J4=0, J6=1.766
+# J1, J3, J5 correspond to the default toss start position from TossingPlanner
+# This ensures the robot is in the planar configuration before rotating J0
+TOSS_READY_POS = [0.0, -0.89, 0.0, 1.57, 0.0, 0.68, 1.766]  # [J0, J1, J2, J3, J4, J5, J6]
 
 # Point Cloud Parameters
 VOXEL_SIZE = 0.005 # 5mm per pixel

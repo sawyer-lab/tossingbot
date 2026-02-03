@@ -8,15 +8,8 @@ import message_filters
 import copy
 import ros_numpy
 from sensor_msgs.msg import PointCloud2, Image
+from tossingbot import config
 
-
-ROI_X = [0.45, 0.7]    
-ROI_Y = [-0.3, 0.3] 
-ROI_Z = [-0.1, 0.5]   
-VOXEL_SIZE = 0.005
-GRID_RES = 0.005 
-IMG_W = int((ROI_X[1] - ROI_X[0]) / GRID_RES)
-IMG_H = int((ROI_Y[1] - ROI_Y[0]) / GRID_RES)
 PUBLISH_DEBUG = False
 
 class PerceptionModule:
@@ -50,8 +43,8 @@ class PerceptionModule:
 
         # 1. Crop
         bbox = o3d.geometry.AxisAlignedBoundingBox(
-            min_bound=[ROI_X[0], ROI_Y[0], ROI_Z[0]], 
-            max_bound=[ROI_X[1], ROI_Y[1], ROI_Z[1]]
+            min_bound=[config.ROI_X[0], config.ROI_Y[0], config.ROI_Z[0]], 
+            max_bound=[config.ROI_X[1], config.ROI_Y[1], config.ROI_Z[1]]
         )
         pcd = pcd.crop(bbox)
         
@@ -59,7 +52,7 @@ class PerceptionModule:
             return None
         
         # 2. Voxel
-        pcd = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE)
+        pcd = pcd.voxel_down_sample(voxel_size=config.VOXEL_SIZE)
         pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
         
         if PUBLISH_DEBUG: self.publish_o3d(pcd, self.pub_step2)
@@ -68,12 +61,12 @@ class PerceptionModule:
         xyz = np.asarray(pcd.points)
         rgb = np.asarray(pcd.colors)
 
-        u = ((xyz[:, 1] - ROI_Y[0]) / GRID_RES).astype(int) 
-        v = ((xyz[:, 0] - ROI_X[0]) / GRID_RES).astype(int) 
-        u = np.clip(u, 0, IMG_H - 1)
-        v = np.clip(v, 0, IMG_W - 1)
+        u = ((xyz[:, 1] - config.ROI_Y[0]) / config.GRID_RES).astype(int) 
+        v = ((xyz[:, 0] - config.ROI_X[0]) / config.GRID_RES).astype(int) 
+        u = np.clip(u, 0, config.IMG_H - 1)
+        v = np.clip(v, 0, config.IMG_W - 1)
 
-        tensor_map = np.zeros((IMG_H, IMG_W, 3), dtype=np.float32)
+        tensor_map = np.zeros((config.IMG_H, config.IMG_W, 3), dtype=np.float32)
         
         # Z-Sort (Highest points render on top)
         sort_idx = np.argsort(xyz[:, 2])
@@ -89,8 +82,8 @@ class PerceptionModule:
         return torch.from_numpy(tensor_map).permute(2, 0, 1)
 
     def pixel_to_world(self, u, v):
-        world_x = ROI_X[0] + (v * GRID_RES) + (GRID_RES / 2.0)
-        world_y = ROI_Y[0] + (u * GRID_RES) + (GRID_RES / 2.0)
+        world_x = config.ROI_X[0] + (v * config.GRID_RES) + (config.GRID_RES / 2.0)
+        world_y = config.ROI_Y[0] + (u * config.GRID_RES) + (config.GRID_RES / 2.0)
         world_z = 0.03
         return np.array([world_x, world_y, world_z])
 
