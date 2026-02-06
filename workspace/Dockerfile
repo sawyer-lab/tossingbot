@@ -12,8 +12,8 @@ RUN apt update && apt install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py && \
-python2 get-pip.py && \
-rm get-pip.py
+    python2 get-pip.py && \
+    rm get-pip.py
 
 # Now install legacy libraries
 # We use 'python2 -m pip' to be explicit
@@ -66,6 +66,7 @@ RUN python3.8 -m pip install \
 
 # Install ros_numpy directly from GitHub (since it's not on PyPI)
 RUN python3.8 -m pip install git+https://github.com/eric-wieser/ros_numpy.git
+
 # -----------------------------------------------------------------------
 # 5. Build cv_bridge for Python 3.8
 # -----------------------------------------------------------------------
@@ -138,8 +139,6 @@ RUN apt update && apt install --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/*
 
 
-
-
 RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-desktop-full \
     && rm -rf /var/lib/apt/lists/*
@@ -161,7 +160,17 @@ RUN apt update && apt install --no-install-recommends -y \
     pcl-tools \
     && rm -rf /var/lib/apt/lists/*
 
-
+# Network debugging tools for robot connection testing
+RUN apt update && apt install -y \
+    iputils-ping \
+    net-tools \
+    avahi-utils \
+    avahi-daemon \
+    libnss-mdns \
+    dnsutils \
+    iproute2 \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG USER=kid
 ARG UID=1000
@@ -169,21 +178,22 @@ ARG GID=1000
 RUN groupadd -g $GID -o $USER
 RUN useradd -m -u $UID -g $GID -o -s /bin/bash $USER
 
+# Configure passwordless sudo for user
+RUN echo "$USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USER && \
+    chmod 0440 /etc/sudoers.d/$USER
+
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USER/.bashrc
 RUN echo "if [ -f /home/$USER/ros_ws/devel/setup.bash ]; then source /home/$USER/ros_ws/devel/setup.bash; fi" >> /home/$USER/.bashrc
 
 COPY init_ws.sh /home/kid/init_ws.sh
-RUN chmod +x /home/kid/init_ws.sh
+COPY init_robot.sh /home/kid/init_robot.sh
+RUN chmod +x /home/kid/init_ws.sh /home/kid/init_robot.sh
 
 USER kid
 RUN mkdir -p /home/$USER/ros_ws/src
 WORKDIR /home/$USER/ros_ws
 RUN /ros_entrypoint.sh catkin_make
 
-
-
-
-RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_robot.git -b release-5.2.0
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_simulator.git -b release-5.2.0
@@ -191,16 +201,26 @@ RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b melod
 
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool merge sawyer_simulator/sawyer_simulator.rosinstall
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
-RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
-ARG HOST_HOSTNAME=hostname
-ARG HOST_IP=172.17.0.1
-ARG ROBOT_HOSTNAME=021607CP00070.local
-RUN sed -i 's/ros_version=".*"/ros_version="melodic"/g' ~/ros_ws/intera.sh
-RUN sed -i "s/your_ip=\".*\"/your_ip=\"${HOST_IP}\"/g" ~/ros_ws/intera.sh
-RUN sed -i "s/my_computer/${HOST_HOSTNAME}/g" ~/ros_ws/intera.sh
-RUN sed -i "s/robot_hostname.local/${ROBOT_HOSTNAME}/g" ~/ros_ws/intera.sh
-RUN /ros_entrypoint.sh rosdep update
 
+# ==============================================================================
+# NETWORK CONFIGURATION - HARDCODED
+# ==============================================================================
+RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
+
+# Hardcoded values (no ARG, no override possible)
+RUN sed -i 's/ros_version=".*"/ros_version="melodic"/g' ~/ros_ws/intera.sh && \
+    sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="192.168.1.100"/g' ~/ros_ws/intera.sh && \
+    sed -i 's/my_computer/rog/g' ~/ros_ws/intera.sh && \
+    sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="192.168.1.103"/g' ~/ros_ws/intera.sh
+
+# Verify configurations applied correctly
+RUN echo "Verifying intera.sh configuration:" && \
+    grep "^your_ip=" ~/ros_ws/intera.sh && \
+    grep "^robot_hostname=" ~/ros_ws/intera.sh && \
+    echo "Configuration verified successfully"
+# ==============================================================================
+
+RUN /ros_entrypoint.sh rosdep update
 
 RUN ln -s /simulation ~/ros_ws/src/.
 # RUN ln -s /perception_pkg ~/ros_ws/src/.
@@ -211,9 +231,9 @@ RUN ln -s /pneumatic_gripper_description ~/ros_ws/src/.
 RUN ln -s /depth_perception ~/ros_ws/src/.
 RUN ln -s /.vscode ~/ros_ws/src/.
 RUN ln -s /plain_perception ~/ros_ws/src/.
-RUN ln -s /tossing ~/ros_ws/src/.
 RUN ln -s /grasping ~/ros_ws/src/.
 RUN ln -s /tossing_system ~/ros_ws/src/.
+RUN ln -s /test_scripts ~/.
 
 RUN /ros_entrypoint.sh catkin_make
 RUN echo "export GAZEBO_MODEL_PATH=\$GAZEBO_MODEL_PATH:~/ros_ws/src/environments/models" >> ~/.bashrc

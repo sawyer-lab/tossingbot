@@ -27,6 +27,8 @@ from tossingbot.learning.agent import TossingAgent
 from tossingbot.learning.utils import RotationTransformer
 from tossingbot.learning.logger import TrainingLogger
 from tossingbot.learning.session_manager import SessionManager
+from tossingbot.learning.experiment_manager import ExperimentManager
+from tossingbot.learning.experiment_session import ExperimentSession
 
 # =============================================================================
 # DEBUG MODE: Set to False for normal training/execution
@@ -103,7 +105,15 @@ Experiments:
                         help='Objects for evaluation (e.g., --eval-objects puck bolt C_shape)')
     parser.add_argument('--eval-episodes', type=int, default=100,
                         help='Number of episodes for evaluation (default: 100)')
-    
+
+    # NEW: Experiment-based arguments
+    parser.add_argument('--experiment', type=str, default=None,
+                        help='Experiment ID (new unified experiment system)')
+    parser.add_argument('--phase', type=str, choices=['train', 'eval'], default=None,
+                        help='Experiment phase to run (requires --experiment)')
+    parser.add_argument('--eval-name', type=str, default=None,
+                        help='Eval phase name (requires --phase eval)')
+
     return parser.parse_args()
 
 def get_epsilon(step, inference_only):
@@ -123,11 +133,175 @@ def main():
     if args.no_viz:
         SHOW_VIZ = False
     
-    # Initialize session manager
+    # Initialize session manager (for backward compatibility)
     session_manager = SessionManager(cfg.SESSION_BASE_DIR)
-    
-    # List sessions if requested
-    if args.list:
+
+    # ========== NEW: EXPERIMENT-BASED EXECUTION ==========
+    # Check if using new experiment system
+    use_experiment_system = args.experiment is not None
+
+    if use_experiment_system:
+        # NEW SYSTEM: Experiment-based execution
+        experiment_manager = ExperimentManager(cfg.SESSION_BASE_DIR + "/experiments")
+        experiment = experiment_manager.load_experiment(args.experiment)
+
+        if experiment is None:
+            print(f"Error: Experiment not found: {args.experiment}")
+            return
+
+        # Validate phase
+        if args.phase is None:
+            print("Error: --phase required when using --experiment")
+            print("Usage: --experiment <id> --phase train|eval [--eval-name <name>]")
+            return
+
+        # Load experiment config
+        try:
+            exp_config = experiment.load_config()
+        except Exception as e:
+            print(f"Error loading experiment config: {e}")
+            return
+
+        # Create adapter session object that mimics old Session interface
+        # This allows the rest of the code to work unchanged
+        class ExperimentSessionAdapter:
+            """Adapter to make ExperimentSession compatible with old Session interface"""
+            def __init__(self, experiment, phase, eval_name=None):
+                self.experiment = experiment
+                self.phase = phase
+                self.eval_name = eval_name
+                self.exp_config = experiment.load_config()
+
+                # Mimic Session interface
+                self.name = f"{experiment.experiment_id}_{phase}"
+                if eval_name:
+                    self.name += f"_{eval_name}"
+                self.session_id = self.name
+                self.metadata = experiment.metadata
+                self.session_dir = experiment.experiment_dir
+
+                # Phase-specific paths
+                if phase == 'train':
+                    self.checkpoint_dir = experiment.get_checkpoint_dir()
+                    self.buffer_dir = os.path.join(experiment.train_dir, "buffer")
+                    self.logs_dir = os.path.join(experiment.train_dir, "logs")
+                elif phase == 'eval':
+                    # For eval, checkpoints come from train, but logs go to eval dir
+                    self.checkpoint_dir = experiment.get_checkpoint_dir()
+                    eval_dir = experiment.get_eval_dir(eval_name)
+                    self.logs_dir = os.path.join(eval_dir, "logs")
+                    self.buffer_dir = None  # No buffer for eval
+
+            def get_checkpoint_path(self, checkpoint_name="checkpoint_best.pth"):
+                return os.path.join(self.checkpoint_dir, checkpoint_name)
+
+            def get_buffer_path(self):
+                if self.buffer_dir:
+                    return os.path.join(self.buffer_dir, "replay_buffer.pkl")
+                return None
+
+            def get_log_path(self):
+                if self.phase == 'train':
+                    return self.experiment.get_train_log_path()
+                else:
+                    return self.experiment.get_eval_log_path(self.eval_name)
+
+            def save_metadata(self):
+                self.experiment.save_metadata()
+
+            def save_hyperparameters(self, hyperparams):
+                """Save hyperparameters to experiment metadata"""
+                if 'hyperparameters' not in self.experiment.metadata:
+                    self.experiment.metadata['hyperparameters'] = {}
+                self.experiment.metadata['hyperparameters'].update(hyperparams)
+                self.experiment.save_metadata()
+
+            def load_hyperparameters(self):
+                """Load hyperparameters from experiment metadata"""
+                return self.experiment.metadata.get('hyperparameters')
+
+            def update_metadata(self, **kwargs):
+                """Update metadata with arbitrary key-value pairs"""
+                self.experiment.metadata.update(kwargs)
+                self.experiment.save_metadata()
+
+            def load_metadata(self):
+                """Load metadata (already loaded in __init__)"""
+                return self.experiment.metadata
+
+        # Setup based on phase
+        if args.phase == 'train':
+            # Training phase
+            train_config = exp_config['train']
+            train_objects = train_config['objects']
+
+            session = ExperimentSessionAdapter(experiment, 'train')
+            INFERENCE_ONLY = False
+
+            # Override args for compatibility
+            args.train_objects = train_objects
+            args.mode = 'training'
+
+            print(f"\n{'='*70}")
+            print(f"EXPERIMENT: {experiment.experiment_id} - TRAINING PHASE")
+            print(f"{'='*70}")
+            print(f"Training objects: {', '.join(train_objects)}")
+            print(f"Target steps: {train_config.get('steps', 'unlimited')}")
+            print(f"{'='*70}\n")
+
+            experiment.set_status('training')
+
+        elif args.phase == 'eval':
+            # Evaluation phase
+            if not args.eval_name:
+                print("Error: --eval-name required for eval phase")
+                print(f"Available: {list(exp_config.get('evals', {}).keys())}")
+                return
+
+            eval_config = experiment.get_eval_config(args.eval_name)
+            eval_objects = eval_config['objects']
+            eval_episodes = eval_config.get('episodes', 100)
+            eval_checkpoint = eval_config.get('checkpoint', 'best')
+
+            # Create eval phase dirs if needed
+            experiment.create_eval_phase_dirs(args.eval_name)
+
+            session = ExperimentSessionAdapter(experiment, 'eval', args.eval_name)
+            INFERENCE_ONLY = True
+
+            # For eval, we need training_session to load weights from
+            training_session = ExperimentSessionAdapter(experiment, 'train')
+
+            # Store which checkpoint to use
+            eval_config['_checkpoint_to_load'] = eval_checkpoint
+
+            # Override args for compatibility
+            args.eval_objects = eval_objects
+            args.eval_episodes = eval_episodes
+            args.eval_only = True
+            args.mode = 'training'  # Keep as training mode but with eval flag
+
+            print(f"\n{'='*70}")
+            print(f"EXPERIMENT: {experiment.experiment_id} - EVAL PHASE: {args.eval_name}")
+            print(f"{'='*70}")
+            print(f"Description: {eval_config.get('description', 'N/A')}")
+            print(f"Eval objects: {', '.join(eval_objects)}")
+            print(f"Episodes: {eval_episodes}")
+            print(f"Checkpoint: {eval_checkpoint}")
+            print(f"{'='*70}\n")
+
+            experiment.set_status('evaluating')
+
+        else:
+            training_session = None  # Not used in train mode
+
+    # ========== OLD: SESSION-BASED EXECUTION (BACKWARD COMPATIBILITY) ==========
+    else:
+        # Existing session-based logic (unchanged)
+        use_experiment_system = False
+
+    # List sessions if requested (old system only)
+    if not use_experiment_system and args.list:
         print("\n=== Training Sessions ===")
         training_sessions = session_manager.list_sessions("training")
         for session in training_sessions:
@@ -137,57 +311,58 @@ def main():
         for session in demo_sessions:
             print(f"  - {session}")
         return
-    
-    # Select or load session
-    training_session = None  # Track training session for eval mode
-    
-    if args.eval_only:
-        # EVAL MODE: Load training session for weights, create separate eval session for logging
-        if not args.session:
-            print("Error: --session required for evaluation mode")
-            return
-        
-        training_session = session_manager.load_session(args.session, "training")
-        if training_session is None:
-            print(f"Error: Training session not found: {args.session}")
-            return
-        
-        # Create separate eval session (e.g., session_exp_baseline_eval)
-        eval_session_name = f"{args.session}_eval"
-        session = session_manager.create_session("training", name=eval_session_name)
-        
-        # Link to training session in metadata
-        session.metadata['training_session'] = args.session
-        session.metadata['mode'] = 'evaluation'
-        session.save_metadata()
-        
-        print(f"Created evaluation session: {session.session_id}")
-        print(f"Loading weights from: {training_session.session_id}\n")
-        
-    elif args.session:
-        session = session_manager.load_session(args.session, args.mode)
-        if session is None:
-            # If session doesn't exist and we're in training mode, create it
-            if args.mode == "training":
-                print(f"Creating new session: {args.session}")
-                session = session_manager.create_session(args.mode, name=args.session)
-            else:
-                print(f"Error: Could not load session {args.session}")
+
+    if not use_experiment_system:
+        # OLD SYSTEM: Select or load session
+        training_session = None  # Track training session for eval mode
+
+        if args.eval_only:
+            # EVAL MODE: Load training session for weights, create separate eval session for logging
+            if not args.session:
+                print("Error: --session required for evaluation mode")
                 return
-    else:
-        if args.mode == "demo":
-            # Demo mode returns (demo_session, training_session)
-            result = session_manager.select_session_interactive("demo")
-            if isinstance(result, tuple):
-                session, training_session = result
-            else:
-                print("Error: Could not select session")
+
+            training_session = session_manager.load_session(args.session, "training")
+            if training_session is None:
+                print(f"Error: Training session not found: {args.session}")
                 return
+
+            # Create separate eval session (e.g., session_exp_baseline_eval)
+            eval_session_name = f"{args.session}_eval"
+            session = session_manager.create_session("training", name=eval_session_name)
+
+            # Link to training session in metadata
+            session.metadata['training_session'] = args.session
+            session.metadata['mode'] = 'evaluation'
+            session.save_metadata()
+
+            print(f"Created evaluation session: {session.session_id}")
+            print(f"Loading weights from: {training_session.session_id}\n")
+
+        elif args.session:
+            session = session_manager.load_session(args.session, args.mode)
+            if session is None:
+                # If session doesn't exist and we're in training mode, create it
+                if args.mode == "training":
+                    print(f"Creating new session: {args.session}")
+                    session = session_manager.create_session(args.mode, name=args.session)
+                else:
+                    print(f"Error: Could not load session {args.session}")
+                    return
         else:
-            session = session_manager.select_session_interactive("training")
-    
-    # Determine if inference only
-    INFERENCE_ONLY = (args.mode == "demo" or args.eval_only)
+            if args.mode == "demo":
+                # Demo mode returns (demo_session, training_session)
+                result = session_manager.select_session_interactive("demo")
+                if isinstance(result, tuple):
+                    session, training_session = result
+                else:
+                    print("Error: Could not select session")
+                    return
+            else:
+                session = session_manager.select_session_interactive("training")
+
+        # Determine if inference only (old system)
+        INFERENCE_ONLY = (args.mode == "demo" or args.eval_only)
     
     # Initialize ROS
     rospy.init_node('tossingbot_brain')

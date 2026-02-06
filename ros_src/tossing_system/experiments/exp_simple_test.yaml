@@ -1,0 +1,30 @@
+# Simple Test Experiment
+# Minimal example for quick testing
+
+name: exp_simple_test
+description: "Simple test: train on 2 objects, eval on seen and unseen"
+
+# Training phase
+train:
+  objects:
+    - L_shape
+    - cube
+  steps: 500
+
+# Minimal evaluation phases
+evals:
+  seen:
+    description: "Test on training objects"
+    objects:
+      - L_shape
+      - cube
+    episodes: 50
+    checkpoint: best
+
+  unseen:
+    description: "Test on new objects"
+    objects:
+      - cylinder
+      - sphere
+    episodes: 50
+    checkpoint: best

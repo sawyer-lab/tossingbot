@@ -6,6 +6,7 @@ docker run -d --rm \
     --runtime=nvidia \
     --gpus all \
     --network host \
+    --add-host "021607CP00070.local:192.168.1.103" \
     --device=/dev/bus/usb/001/002 \
     --privileged \
     -e DISPLAY=$DISPLAY \
@@ -24,13 +25,9 @@ docker run -d --rm \
     --mount type=bind,source=./ros_src/depth_perception,target=/depth_perception \
     --mount type=bind,source=./ros_src/.vscode,target=/.vscode \
     --mount type=bind,source=./ros_src/plain_perception,target=/plain_perception \
-    --mount type=bind,source=./ros_src/tossing,target=/tossing \
     --mount type=bind,source=./ros_src/grasping,target=/grasping \
     --mount type=bind,source=./ros_src/tossing_system,target=/tossing_system \
+    --mount type=bind,source=./test_scripts,target=/test_scripts \
     --name robo2025 \
     -it \
     robo2025-workspace:latest "$@"
-
-# --privileged \
-# AMD hardware acceleration did not work
-# --device=/dev/dri \ --group-add video \

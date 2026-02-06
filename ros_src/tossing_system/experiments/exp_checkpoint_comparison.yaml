@@ -1,0 +1,65 @@
+# Checkpoint Comparison Experiment
+# Compare performance at different training checkpoints
+
+name: exp_checkpoint_comparison
+description: "Compare early, mid, and late training checkpoints on unseen objects"
+
+# Training phase
+train:
+  objects:
+    - L_shape
+    - I_shape
+    - T_shape
+  steps: 2000
+
+# Evaluation at different checkpoints
+evals:
+  # Early checkpoint (500 steps)
+  early_checkpoint:
+    description: "Test with early training checkpoint (500 steps)"
+    objects:
+      - cube
+      - cylinder
+      - sphere
+    episodes: 100
+    checkpoint: step_500
+
+  # Mid checkpoint (1000 steps)
+  mid_checkpoint:
+    description: "Test with mid-training checkpoint (1000 steps)"
+    objects:
+      - cube
+      - cylinder
+      - sphere
+    episodes: 100
+    checkpoint: step_1000
+
+  # Late checkpoint (1500 steps)
+  late_checkpoint:
+    description: "Test with late training checkpoint (1500 steps)"
+    objects:
+      - cube
+      - cylinder
+      - sphere
+    episodes: 100
+    checkpoint: step_1500
+
+  # Best checkpoint
+  best_checkpoint:
+    description: "Test with best performing checkpoint"
+    objects:
+      - cube
+      - cylinder
+      - sphere
+    episodes: 100
+    checkpoint: best
+
+  # Latest checkpoint
+  final_checkpoint:
+    description: "Test with final training checkpoint"
+    objects:
+      - cube
+      - cylinder
+      - sphere
+    episodes: 100
+    checkpoint: latest
