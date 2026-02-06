@@ -1,4 +1,4 @@
-FROM ros:melodic-perception
+FROM ros:noetic-perception
 
 RUN apt update && apt install -y --no-install-recommends \
     curl \
@@ -11,94 +11,27 @@ RUN apt update && apt install -y --no-install-recommends \
     fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py && \
-    python2 get-pip.py && \
-    rm get-pip.py
-
-# Now install legacy libraries
-# We use 'python2 -m pip' to be explicit
-RUN python2 -m pip install --upgrade "pip<21.0"
-RUN python2 -m pip install numpy
-RUN python2 -m pip install --no-cache-dir \
-    casadi==3.5.5 \
-    scipy==1.2.3 \
-    matplotlib==2.2.5 
-    
-# 1. Install Python 3.8 from PPA
-RUN apt-get update && apt-get install -y software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
-    apt-get install -y \
-    python3.8 \
-    python3.8-dev \
-    python3.8-distutils \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install system libraries required by OpenCV (and Open3D)
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install Pip for Python 3.8 (Legacy URL)
-RUN curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py && python3.8 get-pip.py && rm get-pip.py
+# Install Python 3 pip and development tools
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# 3. Install Modern PyTorch (CUDA 12.1) - CRITICAL UPDATE
-RUN python3.8 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-
-# 4. Install Build Dependencies for ROS
-RUN python3.8 -m pip install \
+# Install only essential ROS Python packages
+RUN python3 -m pip install \
     rospkg \
     catkin_pkg \
     numpy \
     pyyaml \
-    empy==3.3.4 \
-    open3d \
-    stable-baselines3 \
-    gymnasium \
-    tensorboard \
-    shimmy \ 
-    opencv-python \ 
-    casadi \
-    scipy \
-    matplotlib
+    empy
 
-# Install ros_numpy directly from GitHub (since it's not on PyPI)
-RUN python3.8 -m pip install git+https://github.com/eric-wieser/ros_numpy.git
-
-# -----------------------------------------------------------------------
-# 5. Build cv_bridge for Python 3.8
-# -----------------------------------------------------------------------
-RUN mkdir -p /cv_bridge_ws/src && \
-    cd /cv_bridge_ws/src && \
-    git clone https://github.com/ros-perception/vision_opencv.git && \
-    cd vision_opencv && \
-    git checkout melodic && \
-    cd /cv_bridge_ws && \
-    /bin/bash -c "source /opt/ros/melodic/setup.bash && \
-    catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3.8 \
-                -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 \
-                -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.8.so"
-
-# -----------------------------------------------------------------------
-# 6. Build geometry2 (tf2_ros) for Python 3.8
-# -----------------------------------------------------------------------
-RUN mkdir -p /geometry2_ws/src && \
-    cd /geometry2_ws/src && \
-    git clone https://github.com/ros/geometry2.git && \
-    cd geometry2 && \
-    git checkout melodic-devel && \
-    touch tf2_kdl/CATKIN_IGNORE && \
-    touch tf2_bullet/CATKIN_IGNORE && \
-    touch test_tf2/CATKIN_IGNORE && \
-    cd /geometry2_ws && \
-    /bin/bash -c "source /opt/ros/melodic/setup.bash && \
-    catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3.8 \
-                -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 \
-                -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.8.so"
-
-                
 # Install JetBrains Mono fonts
 RUN wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip -O /tmp/JetBrainsMono.zip \
     && unzip -q /tmp/JetBrainsMono.zip -d /tmp/JetBrainsMono \
@@ -107,20 +40,9 @@ RUN wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/
     && fc-cache -fv \
     && rm -rf /tmp/JetBrainsMono.zip /tmp/JetBrainsMono
 
-# https://support.rethinkrobotics.com/support/solutions/articles/80000980134-workstation-setup
-# From https://sdk.rethinkrobotics.com/intera/Workstation_Setup
+# Install ROS packages for robot connectivity
 RUN apt update && apt install --no-install-recommends -y \
     build-essential \
-    python-argparse \
-    python-pip \
-    python-rosdep \
-    python-rosinstall \
-    python-rosinstall-generator \
-    python-vcstools \
-    python-wstool \
-    python-numpy \
-    python-opencv \
-    python-tk \
     ros-${ROS_DISTRO}-control-msgs \
     ros-${ROS_DISTRO}-xacro \
     ros-${ROS_DISTRO}-tf2-ros \
@@ -143,10 +65,9 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-desktop-full \
     && rm -rf /var/lib/apt/lists/*
 
-# From https://support.rethinkrobotics.com/support/solutions/articles/80000980381-gazebo-tutorial
+# Gazebo and simulation packages
 RUN apt update && apt install --no-install-recommends -y \
-    gazebo9 \
-    python-wstool \
+    gazebo11 \
     ros-${ROS_DISTRO}-control-toolbox \
     ros-${ROS_DISTRO}-gazebo-ros-control \
     ros-${ROS_DISTRO}-gazebo-ros-pkgs \
@@ -197,7 +118,7 @@ RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_robot.git -b release-5.2.0
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_simulator.git -b release-5.2.0
-RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b melodic-devel
+RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b noetic-devel
 
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool merge sawyer_simulator/sawyer_simulator.rosinstall
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
@@ -208,7 +129,7 @@ RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
 RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
 
 # Hardcoded values (no ARG, no override possible)
-RUN sed -i 's/ros_version=".*"/ros_version="melodic"/g' ~/ros_ws/intera.sh && \
+RUN sed -i 's/ros_version=".*"/ros_version="noetic"/g' ~/ros_ws/intera.sh && \
     sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="192.168.1.100"/g' ~/ros_ws/intera.sh && \
     sed -i 's/my_computer/rog/g' ~/ros_ws/intera.sh && \
     sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="192.168.1.103"/g' ~/ros_ws/intera.sh
