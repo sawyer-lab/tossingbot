@@ -1,5 +1,8 @@
 FROM ros:noetic-perception
 
+# Set standard TERM for consistent terminal behavior
+ENV TERM=xterm-256color
+
 RUN apt update && apt install -y --no-install-recommends \
     curl \
     git \
@@ -17,20 +20,47 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python 3 pip and development tools
+# Install Python 3 pip and development tools (uses system Python 3.8)
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create python symlink for compatibility
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # Install only essential ROS Python packages
 RUN python3 -m pip install \
     rospkg \
     catkin_pkg \
-    numpy \
+    "numpy>=1.20.0" \
     pyyaml \
     empy
+
+# Install compatible typing-extensions for Python 3.8 first
+RUN python3 -m pip install --no-cache-dir "typing-extensions==4.5.0"
+
+# Install PyTorch 2.0.1 with CUDA 11.8 (last version fully compatible with Python 3.8)
+RUN python3 -m pip install --no-cache-dir \
+    torch==2.0.1 \
+    torchvision==0.15.2 \
+    --index-url https://download.pytorch.org/whl/cu118
+
+# Install scientific computing and optimization libraries
+RUN python3 -m pip install --no-cache-dir \
+    casadi \
+    scipy \
+    matplotlib \
+    opencv-python
+
+# Install Open3D for point cloud processing
+RUN python3 -m pip install --no-cache-dir \
+    open3d
+
+# Install ros_numpy from GitHub (not available on PyPI)
+RUN python3 -m pip install --no-cache-dir \
+    git+https://github.com/eric-wieser/ros_numpy.git
 
 # Install JetBrains Mono fonts
 RUN wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip -O /tmp/JetBrainsMono.zip \
@@ -72,7 +102,6 @@ RUN apt update && apt install --no-install-recommends -y \
     ros-${ROS_DISTRO}-gazebo-ros-control \
     ros-${ROS_DISTRO}-gazebo-ros-pkgs \
     ros-${ROS_DISTRO}-kdl-parser \
-    ros-${ROS_DISTRO}-qt-build \
     ros-${ROS_DISTRO}-realtime-tools \
     ros-${ROS_DISTRO}-ros-control \
     ros-${ROS_DISTRO}-ros-controllers \
@@ -118,7 +147,7 @@ RUN /ros_entrypoint.sh catkin_make
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_robot.git -b release-5.2.0
 RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_simulator.git -b release-5.2.0
-RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b noetic-devel
+RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b melodic-devel
 
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool merge sawyer_simulator/sawyer_simulator.rosinstall
 RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update

@@ -63,7 +63,7 @@ python experiment_cli.py run --experiment my_exp --phase eval --eval-name all
 python experiment_cli.py run --experiment my_exp --phase all
 
 # Analyze
-python experiment_cli.py analyze --experiment my_exp
+python experiment_cli.py analyze --experiment my_exptossing_system/src/tossingbot
 
 # Compare
 python experiment_cli.py compare --experiments exp1 exp2

@@ -20,6 +20,10 @@ class TrainingLogger:
         self.session = session
         self.log_path = session.get_log_path()
         
+        # Ensure log directory exists
+        log_dir = os.path.dirname(self.log_path)
+        os.makedirs(log_dir, exist_ok=True)
+        
         # Track training objects for seen/unseen analysis
         self.train_objects = set(train_objects) if train_objects else None
         

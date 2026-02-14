@@ -23,7 +23,7 @@ CENTER_Y = 0.1363
 # Define ROI in Robot Frame
 ROI_X = [CENTER_X - WORKSPACE_SIZE/2, CENTER_X + WORKSPACE_SIZE/2]
 ROI_Y = [CENTER_Y - WORKSPACE_SIZE/2, CENTER_Y + WORKSPACE_SIZE/2]
-ROI_Z = [-0.25, -0.20]
+ROI_Z = [-0.249, -0.199]  # Raised 1mm to trim table from image
 
 # Safety Heights
 GRASP_Z = -0.25
@@ -43,6 +43,10 @@ GRID_RES = 0.005
 # Auto-calculate Image Size 
 IMG_W = int((ROI_X[1] - ROI_X[0]) / GRID_RES)
 IMG_H = int((ROI_Y[1] - ROI_Y[0]) / GRID_RES)
+
+# Object Spawning Parameters
+INSTANCES_PER_TYPE = None  # None = fill workspace, or integer for fixed count
+MIN_OBJECT_DISTANCE = 0.08  # Minimum distance between objects (reduced for smaller objects)
 
 # Training Hyperparameters
 LEARNING_RATE = 1e-4

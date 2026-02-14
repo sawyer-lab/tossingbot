@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from tossingbot.learning.experiment_session import ExperimentSession
 from tossingbot.scripts import analyze_training
+from tossingbot.scripts import visualize_object_grasps
 
 
 def load_log(log_path):
@@ -42,6 +43,27 @@ def extract_steps(entries):
     return [e for e in entries if e.get('event_type') != 'episode_end']
 
 
+def compute_last_n_success_rate(steps, n=50):
+    """
+    Compute success rate over the last N attempts.
+    
+    Args:
+        steps: List of step entries
+        n: Number of recent steps to consider
+    
+    Returns:
+        Success rate (0.0 to 1.0), or None if insufficient data
+    """
+    if len(steps) < n:
+        if len(steps) == 0:
+            return None
+        n = len(steps)
+    
+    recent_steps = steps[-n:]
+    successes = sum(1 for s in recent_steps if s.get('success', False))
+    return successes / n
+
+
 def compute_metrics(steps):
     """Compute metrics from step entries"""
     if not steps:
@@ -49,7 +71,8 @@ def compute_metrics(steps):
             'total_attempts': 0,
             'successes': 0,
             'success_rate': 0.0,
-            'avg_confidence': 0.0
+            'avg_confidence': 0.0,
+            'last_50_success_rate': None
         }
 
     total = len(steps)
@@ -60,7 +83,8 @@ def compute_metrics(steps):
         'total_attempts': total,
         'successes': successes,
         'success_rate': successes / total if total > 0 else 0.0,
-        'avg_confidence': np.mean(confidences) if confidences else 0.0
+        'avg_confidence': np.mean(confidences) if confidences else 0.0,
+        'last_50_success_rate': compute_last_n_success_rate(steps, n=50)
     }
 
 
@@ -189,13 +213,16 @@ def generate_eval_comparison_plots(eval_logs: Dict[str, List], output_dir: str):
     print(f"  Generated evaluation comparison plots in: {output_dir}")
 
 
-def analyze_experiment(experiment: ExperimentSession, eval_names: Optional[List[str]] = None) -> bool:
+def analyze_experiment(experiment: ExperimentSession, 
+                      eval_names: Optional[List[str]] = None,
+                      include_object_grasps: bool = True) -> bool:
     """
     Generate unified analysis combining training and multiple evaluations
 
     Args:
         experiment: ExperimentSession object
         eval_names: List of eval phase names to analyze, or None for all
+        include_object_grasps: Whether to generate per-object grasp visualizations
 
     Returns:
         True if successful, False otherwise
@@ -214,6 +241,14 @@ def analyze_experiment(experiment: ExperimentSession, eval_names: Optional[List[
 
         if not success:
             print("Warning: Training analysis failed")
+        
+        # Per-object grasp visualizations for training
+        if include_object_grasps:
+            print("  Generating per-object grasp visualizations for training...")
+            try:
+                visualize_object_grasps.analyze_per_object_grasps(train_log_path, train_output_dir)
+            except Exception as e:
+                print(f"  Warning: Per-object grasp visualization failed: {e}")
     else:
         print("Warning: No training log found. Skipping training analysis.")
 
@@ -261,6 +296,14 @@ def analyze_experiment(experiment: ExperimentSession, eval_names: Optional[List[
                 analyze_training.plot_confidence_distribution(steps, eval_output_dir)
                 analyze_training.plot_grasp_heatmap(steps, eval_output_dir)
                 analyze_training.plot_rotation_distribution(steps, eval_output_dir)
+                
+                # Per-object grasp visualizations
+                if include_object_grasps:
+                    print(f"    Generating per-object grasp visualizations for {eval_name}...")
+                    try:
+                        visualize_object_grasps.analyze_per_object_grasps(eval_log_path, eval_output_dir)
+                    except Exception as e:
+                        print(f"    Warning: Per-object grasp visualization failed: {e}")
         else:
             print(f"  Warning: No log found for eval phase '{eval_name}'")
 
@@ -314,6 +357,8 @@ def analyze_experiment(experiment: ExperimentSession, eval_names: Optional[List[
             f.write(f"  Total Steps: {overall['total_attempts']}\n")
             f.write(f"  Successes: {overall['successes']}\n")
             f.write(f"  Success Rate: {overall['success_rate']*100:.2f}%\n")
+            if overall.get('last_50_success_rate') is not None:
+                f.write(f"  Last 50 Attempts: {overall['last_50_success_rate']*100:.2f}%\n")
             f.write(f"  Avg Confidence: {overall['avg_confidence']:.4f}\n\n")
 
         # Evaluation summaries
@@ -325,6 +370,8 @@ def analyze_experiment(experiment: ExperimentSession, eval_names: Optional[List[
             f.write(f"  Attempts: {overall['total_attempts']}\n")
             f.write(f"  Successes: {overall['successes']}\n")
             f.write(f"  Success Rate: {overall['success_rate']*100:.2f}%\n")
+            if overall.get('last_50_success_rate') is not None:
+                f.write(f"  Last 50 Attempts: {overall['last_50_success_rate']*100:.2f}%\n")
             f.write(f"  Avg Confidence: {overall['avg_confidence']:.4f}\n")
 
         f.write("\n" + "=" * 70 + "\n")

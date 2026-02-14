@@ -49,8 +49,11 @@ class VisionProcessor:
         
         tensor_map[u, v, :3] = sorted_rgb
         
+        # Normalize height values from ROI_Z range to [0, 1]
         height_vals = sorted_xyz[:, 2]
-        tensor_map[u, v, 3] = np.clip(height_vals, 0.0, 1.0) 
+        z_min, z_max = config.ROI_Z[0], config.ROI_Z[1]
+        height_normalized = (height_vals - z_min) / (z_max - z_min)
+        tensor_map[u, v, 3] = np.clip(height_normalized, 0.0, 1.0) 
 
         # Permute to (C, H, W) -> (4, H, W)
         return torch.from_numpy(tensor_map).permute(2, 0, 1)

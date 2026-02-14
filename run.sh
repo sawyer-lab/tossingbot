@@ -10,7 +10,7 @@ docker run -d --rm \
     --device=/dev/bus/usb/001/002 \
     --privileged \
     -e DISPLAY=$DISPLAY \
-    -e TERM \
+    -e TERM=xterm-256color \
     -e NVIDIA_DRIVER_CAPABILITIES=all \
     -e NVIDIA_VISIBLE_DEVICES=all \
     -e __NV_PRIME_RENDER_OFFLOAD=1 \

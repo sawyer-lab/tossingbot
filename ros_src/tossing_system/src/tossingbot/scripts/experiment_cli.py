@@ -131,8 +131,9 @@ def cmd_run(args):
         sys.exit(1)
 
     config = experiment.load_config()
-    script_dir = os.path.dirname(os.path.dirname(__file__))
-    auto_grasp_path = os.path.join(script_dir, 'scripts', 'auto_grasp.py')
+    # Get the directory where experiment_cli.py is located (should be scripts/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    auto_grasp_path = os.path.join(script_dir, 'auto_grasp.py')
 
     # Determine what to run
     if args.phase == 'train':
@@ -274,9 +275,12 @@ def cmd_analyze(args):
 
     # Determine which eval phases to analyze
     eval_names = args.eval_names if args.eval_names else None
+    
+    # Per-object grasp visualization flag
+    include_object_grasps = args.include_object_grasps
 
     # Run analysis
-    success = analyze_experiment.analyze_experiment(experiment, eval_names)
+    success = analyze_experiment.analyze_experiment(experiment, eval_names, include_object_grasps)
 
     if success:
         print(f"\n{'=' * 70}")
@@ -335,9 +339,10 @@ Examples:
   %(prog)s info --experiment exp_baseline
   %(prog)s list-evals --experiment exp_baseline
 
-  # Analyze results
+  # Analyze results (includes grasp visualizations by default)
   %(prog)s analyze --experiment exp_baseline
   %(prog)s analyze --experiment exp_baseline --eval-names seen unseen
+  %(prog)s analyze --experiment exp_baseline --no-grasps
 
   # Compare experiments
   %(prog)s compare --experiments exp_baseline exp_variant
@@ -378,6 +383,12 @@ Examples:
     parser_analyze = subparsers.add_parser('analyze', help='Analyze experiment')
     parser_analyze.add_argument('--experiment', required=True, help='Experiment ID')
     parser_analyze.add_argument('--eval-names', nargs='+', help='Specific eval phases to analyze')
+    parser_analyze.add_argument('--include-grasps', dest='include_object_grasps',
+                               action='store_true', default=True,
+                               help='Generate grasp visualizations (default: True)')
+    parser_analyze.add_argument('--no-grasps', dest='include_object_grasps', 
+                               action='store_false',
+                               help='Skip grasp visualizations')
 
     # Compare command
     parser_compare = subparsers.add_parser('compare', help='Compare experiments')

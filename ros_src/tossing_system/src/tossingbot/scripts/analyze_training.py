@@ -275,11 +275,37 @@ def plot_rotation_distribution(steps, output_dir):
     print(f"  Generated: rotation_analysis.png")
 
 
+def compute_last_n_success_rate(steps, n=50):
+    """
+    Compute success rate over the last N attempts.
+    
+    Args:
+        steps: List of step entries
+        n: Number of recent steps to consider
+    
+    Returns:
+        Success rate (0.0 to 1.0), or None if insufficient data
+    """
+    if len(steps) < n:
+        # Not enough data for full window
+        if len(steps) == 0:
+            return None
+        # Use what we have
+        n = len(steps)
+    
+    recent_steps = steps[-n:]
+    successes = sum(1 for s in recent_steps if s['success'])
+    return successes / n
+
+
 def generate_summary_stats(steps, output_dir):
     """Generate text summary of statistics"""
     total_steps = len(steps)
     successes = sum(1 for s in steps if s['success'])
     success_rate = successes / total_steps if total_steps > 0 else 0
+    
+    # Recent performance (last 50 attempts)
+    last_50_rate = compute_last_n_success_rate(steps, n=50)
     
     # Per-object stats
     object_stats = defaultdict(lambda: {'attempts': 0, 'successes': 0})
@@ -307,7 +333,11 @@ def generate_summary_stats(steps, output_dir):
         f.write(f"Total Steps: {total_steps}\n")
         f.write(f"Successes: {successes}\n")
         f.write(f"Failures: {total_steps - successes}\n")
-        f.write(f"Overall Success Rate: {success_rate*100:.2f}%\n\n")
+        f.write(f"Overall Success Rate: {success_rate*100:.2f}%\n")
+        
+        if last_50_rate is not None:
+            f.write(f"Last 50 Attempts Success Rate: {last_50_rate*100:.2f}%\n")
+        f.write("\n")
         
         f.write("-" * 60 + "\n")
         f.write("PER-OBJECT STATISTICS\n")
@@ -339,6 +369,8 @@ def generate_summary_stats(steps, output_dir):
     print("=" * 60)
     print(f"Total Steps: {total_steps}")
     print(f"Overall Success Rate: {success_rate*100:.2f}%")
+    if last_50_rate is not None:
+        print(f"Last 50 Attempts: {last_50_rate*100:.2f}%")
     print(f"Average Confidence: {avg_confidence:.4f}")
 
 

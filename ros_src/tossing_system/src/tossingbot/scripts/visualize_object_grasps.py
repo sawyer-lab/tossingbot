@@ -20,6 +20,23 @@ from tossingbot.scripts import object_dimensions
 from tossingbot.scripts import coordinate_transforms
 
 
+import re
+
+
+def get_base_object_type(object_name):
+    """
+    Extract base object type by removing trailing instance numbers.
+    
+    Examples:
+        'C_shape_2' -> 'C_shape'
+        'T_shape_145' -> 'T_shape'
+        'L_shape' -> 'L_shape'
+    """
+    # Remove trailing underscore and numbers
+    base_name = re.sub(r'_\d+$', '', object_name)
+    return base_name
+
+
 def load_training_log(log_path):
     """Load training log and extract grasp data"""
     grasps_by_object = defaultdict(list)
@@ -34,9 +51,12 @@ def load_training_log(log_path):
                     continue
                 
                 # Extract data
-                object_name = entry.get('object_name')
-                if not object_name or object_name == 'unknown':
+                object_name_raw = entry.get('object_name')
+                if not object_name_raw or object_name_raw == 'unknown':
                     continue
+                
+                # Get base object type (strip instance numbers)
+                object_name = get_base_object_type(object_name_raw)
                 
                 # Get grasp pixel coordinates
                 predicted_grasp = entry.get('predicted_grasp', {})
@@ -53,9 +73,9 @@ def load_training_log(log_path):
                     cfg.IMG_H, cfg.IMG_W
                 )
                 
-                # Get object pose
+                # Get object pose (use raw name with instance number)
                 object_poses = entry.get('object_poses', {})
-                object_pose = object_poses.get(object_name)
+                object_pose = object_poses.get(object_name_raw)
                 
                 if not object_pose:
                     continue
@@ -65,7 +85,7 @@ def load_training_log(log_path):
                     world_xy, object_pose
                 )
                 
-                # Store
+                # Store under base object type
                 grasps_by_object[object_name].append({
                     'x': grasp_obj[0],
                     'y': grasp_obj[1],

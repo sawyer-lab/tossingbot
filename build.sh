@@ -30,10 +30,13 @@ else
     echo "Ethernet not available, using first IP: $HOST_IP"
 fi
 
-docker build \
-    $NO_CACHE \
-    --build-arg HOST_HOSTNAME=$(hostname) \
-    --build-arg HOST_IP=$HOST_IP \
-    --build-arg ROBOT_HOSTNAME=021607CP00070.local \
-    -t robo2025-workspace workspace
+# Use systemd-run to limit resources
+# DOCKER_BUILDKIT=0 forces the legacy builder which is more memory-efficient during export
+DOCKER_BUILDKIT=0 systemd-run --scope -p MemoryMax=12G -p MemorySwapMax=4G -p CPUQuota=80% \
+    docker build \
+        $NO_CACHE \
+        --build-arg HOST_HOSTNAME=$(hostname) \
+        --build-arg HOST_IP=$HOST_IP \
+        --build-arg ROBOT_HOSTNAME=021607CP00070.local \
+        -t robo2025-workspace workspace
 

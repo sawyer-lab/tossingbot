@@ -34,7 +34,7 @@ from tossingbot.learning.experiment_session import ExperimentSession
 # DEBUG MODE: Set to False for normal training/execution
 # =============================================================================
 DEBUG_MODE = False  # Set to True for visual debugging with user confirmation
-SHOW_VIZ = False     # Set to False to disable the visual dashboard display
+SHOW_VIZ = True      # Set to False to disable the visual dashboard display
 
 def parse_args():
     """Parse command line arguments"""
@@ -234,6 +234,7 @@ def main():
             # Training phase
             train_config = exp_config['train']
             train_objects = train_config['objects']
+            target_steps = train_config.get('steps', None)  # Get target steps
 
             session = ExperimentSessionAdapter(experiment, 'train')
             INFERENCE_ONLY = False
@@ -246,7 +247,7 @@ def main():
             print(f"EXPERIMENT: {experiment.experiment_id} - TRAINING PHASE")
             print(f"{'='*70}")
             print(f"Training objects: {', '.join(train_objects)}")
-            print(f"Target steps: {train_config.get('steps', 'unlimited')}")
+            print(f"Target steps: {target_steps if target_steps else 'unlimited'}")
             print(f"{'='*70}\n")
 
             experiment.set_status('training')
@@ -260,8 +261,9 @@ def main():
 
             eval_config = experiment.get_eval_config(args.eval_name)
             eval_objects = eval_config['objects']
-            eval_episodes = eval_config.get('episodes', 100)
+            target_episodes = eval_config.get('episodes', 100)
             eval_checkpoint = eval_config.get('checkpoint', 'best')
+            instances_per_type_override = eval_config.get('instances_per_type', None)
 
             # Create eval phase dirs if needed
             experiment.create_eval_phase_dirs(args.eval_name)
@@ -277,16 +279,17 @@ def main():
 
             # Override args for compatibility
             args.eval_objects = eval_objects
-            args.eval_episodes = eval_episodes
+            args.eval_episodes = target_episodes
             args.eval_only = True
             args.mode = 'training'  # Keep as training mode but with eval flag
+            target_steps = None  # No step limit in eval, use episodes
 
             print(f"\n{'='*70}")
             print(f"EXPERIMENT: {experiment.experiment_id} - EVAL PHASE: {args.eval_name}")
             print(f"{'='*70}")
             print(f"Description: {eval_config.get('description', 'N/A')}")
             print(f"Eval objects: {', '.join(eval_objects)}")
-            print(f"Episodes: {eval_episodes}")
+            print(f"Episodes: {target_episodes}")
             print(f"Checkpoint: {eval_checkpoint}")
             print(f"{'='*70}\n")
 
@@ -397,6 +400,10 @@ def main():
     objects_for_env = eval_objects if args.eval_only else train_objects
     env = TossingEnv(allowed_objects=objects_for_env)
     
+    # Store instances_per_type override for env reset
+    if 'instances_per_type_override' in locals():
+        env._instances_per_type_override = instances_per_type_override
+    
     # Load agent and determine session for logging
     if args.eval_only:
         # EVAL MODE: Load weights from training session, log to eval session
@@ -437,14 +444,24 @@ def main():
         cv2.resizeWindow("Dashboard", 1400, 900)
     
     # Initialize logger (with train_objects for seen/unseen tracking)
-    logger = TrainingLogger(session_for_logging, train_objects=train_objects) if not INFERENCE_ONLY else None
+    # Always log, even in eval mode (INFERENCE_ONLY just disables training/buffer)
+    logger = TrainingLogger(session_for_logging, train_objects=train_objects)
     
     # 2. Reset
     obs, _ = env.reset(force_new=True)
     failed_attempts = [] # Short term memory
+    consecutive_fails_on_object = 0  # Track fails for eval reset
     
-    step_count = session.metadata.get('total_steps', 0)  # Continue from last step
-    episode_count = session.metadata.get('total_episodes', 0)
+    # Separate step counting for train vs eval
+    if INFERENCE_ONLY:
+        # Eval mode: start from 0, count episodes
+        step_count = 0
+        episode_count = 0
+    else:
+        # Train mode: continue from last checkpoint
+        step_count = session.metadata.get('total_steps', 0)
+        episode_count = session.metadata.get('total_episodes', 0)
+    
     episode_steps = 0
     episode_successes = 0
     
@@ -452,6 +469,14 @@ def main():
 
     # 3. Loop
     while not rospy.is_shutdown():
+        # Check stopping conditions
+        if not INFERENCE_ONLY and target_steps and step_count >= target_steps:
+            rospy.loginfo(f"Reached target steps ({target_steps}). Stopping training.")
+            break
+        if INFERENCE_ONLY and target_episodes and episode_count >= target_episodes:
+            rospy.loginfo(f"Completed target episodes ({target_episodes}). Stopping evaluation.")
+            break
+        
         if obs is None: 
             obs = env.get_observation()
             rospy.sleep(0.1); continue
@@ -562,6 +587,9 @@ def main():
         episode_steps += 1
         if success:
             episode_successes += 1
+            consecutive_fails_on_object = 0  # Reset fail counter on success
+        else:
+            consecutive_fails_on_object += 1
         
         # --- G. SAVE ---
         if step_count % cfg.SAVE_INTERVAL == 0 and step_count > 0 and not INFERENCE_ONLY:
@@ -579,7 +607,15 @@ def main():
         else:
             failed_attempts.append((rot_idx, u_rot, v_rot))
         
-        # --- I. NEXT EPISODE ---
+        # --- I. EVAL: Reset scene after 5 consecutive failures ---
+        if INFERENCE_ONLY and consecutive_fails_on_object >= 5:
+            rospy.logwarn(f"5 consecutive failures in eval mode - forcing scene reset")
+            obs, _ = env.reset(force_new=True)
+            failed_attempts = []
+            consecutive_fails_on_object = 0
+            continue
+        
+        # --- J. NEXT EPISODE ---
         obs, is_new = env.reset(previous_success=success)
         if is_new: 
             # Log episode end
