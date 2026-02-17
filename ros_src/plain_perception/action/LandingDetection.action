@@ -1,9 +1,0 @@
-# Goal - sent by client to start detection
----
-# Result - sent when action completes
-int32 landing_index
-string message
----
-# Feedback - sent periodically during execution
-float32 elapsed_time
-string status

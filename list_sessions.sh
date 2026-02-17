@@ -1,1 +1,0 @@
-ros_src/tossing_system/list_sessions.sh

@@ -1,0 +1,39 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+  <model name='cube_small'>
+    <link name='link'>
+      <inertial>
+        <mass>0.0844</mass>
+        <inertia>
+          <ixx>0.000047</ixx> <ixy>0</ixy> <ixz>0</ixz>
+          <iyy>0.000047</iyy> <iyz>0</iyz>
+          <izz>0.000047</izz>
+        </inertia>
+      </inertial>
+      <visual name='visual'>
+        <geometry>
+          <box><size>0.026250 0.026250 0.026250</size></box>
+        </geometry>
+        <material><script><name>Gazebo/Purple</name></script></material>
+      </visual>
+      <collision name='collision'>
+        <geometry>
+          <box><size>0.026250 0.026250 0.026250</size></box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>100.0</mu> <mu2>100.0</mu2>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <kp>100000.0</kp> <kd>1.0</kd>
+              <min_depth>0.001</min_depth>
+            </ode>
+          </contact>
+        </surface>
+      </collision>
+    </link>
+  </model>
+</sdf>

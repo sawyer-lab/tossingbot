@@ -1,0 +1,49 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+  <model name='cross_small'>
+    <link name='link'>
+      <inertial>
+        <mass>0.0633</mass>
+        <inertia>
+          <ixx>0.000047</ixx> <ixy>0</ixy> <ixz>0</ixz>
+          <iyy>0.000047</iyy> <iyz>0</iyz>
+          <izz>0.000095</izz>
+        </inertia>
+      </inertial>
+
+      <visual name='stem_vis'>
+        <geometry>
+           <box><size>0.090000 0.018750 0.018750</size></box>
+        </geometry>
+        <material><script><name>Gazebo/Turquoise</name></script></material>
+      </visual>
+      <collision name='stem_col'>
+        <geometry>
+           <box><size>0.090000 0.018750 0.018750</size></box>
+        </geometry>
+        <surface>
+           <friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction>
+           <contact><ode><kp>100000.0</kp><kd>1.0</kd><min_depth>0.001</min_depth></ode></contact>
+        </surface>
+      </collision>
+
+      <visual name='crossbar_vis'>
+        <pose>0.022500 0.000000 0.000000 0 0 0</pose>
+        <geometry>
+           <box><size>0.018750 0.060000 0.018750</size></box>
+        </geometry>
+        <material><script><name>Gazebo/Turquoise</name></script></material>
+      </visual>
+      <collision name='crossbar_col'>
+        <pose>0.022500 0.000000 0.000000 0 0 0</pose>
+        <geometry>
+           <box><size>0.018750 0.060000 0.018750</size></box>
+        </geometry>
+        <surface>
+           <friction><ode><mu>100.0</mu><mu2>100.0</mu2></ode></friction>
+           <contact><ode><kp>100000.0</kp><kd>1.0</kd><min_depth>0.001</min_depth></ode></contact>
+        </surface>
+      </collision>
+    </link>
+  </model>
+</sdf>

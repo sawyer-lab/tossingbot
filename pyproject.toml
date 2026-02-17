@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tossingbot"
+version = "1.0.0"
+requires-python = ">=3.8"
+dependencies = [
+    "pyzmq>=25.0.0",
+    "requests>=2.25.0",
+    "python-socketio>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pylance]
+include = ["src"]

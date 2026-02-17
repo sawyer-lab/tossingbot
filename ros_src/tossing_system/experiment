@@ -1,7 +1,0 @@
-#!/bin/bash
-# Wrapper script for experiment_cli.py
-# Usage: ./experiment <command> [options]
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-exec python3.8 "$SCRIPT_DIR/src/tossingbot/scripts/experiment_cli.py" "$@"

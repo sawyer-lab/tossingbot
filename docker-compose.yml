@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Development mode - mounts robot_api for live editing
+  robot_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: robo2025:latest
+    pull_policy: never  # Don't try to pull, always use local build
+    container_name: robo2025_dev
+    network_mode: host
+    privileged: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      # Force NVIDIA GPU for OpenGL/Vulkan (Gazebo)
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - __VK_LAYER_NV_optimus=NVIDIA_only
+      - PYTHONPATH=/home/kid/ros_ws/src/custom/robot_api:/tossing_system/src:$PYTHONPATH
+      - ROS_MASTER_URI=http://localhost:11311
+      - HOST_IP=${HOST_IP:-192.168.1.100}
+      - ROBOT_IP=${ROBOT_IP:-192.168.1.103}
+      - ROBOT_HOSTNAME=${ROBOT_HOSTNAME:-021607CP00070.local}
+    volumes:
+      - ./ros:/home/kid/ros_ws/src/custom
+      - ./src:/tossing_system/src
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    stdin_open: true
+    tty: true
+    command: /bin/bash
