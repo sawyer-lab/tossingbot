@@ -37,8 +37,8 @@ class TossingPlanner:
 
 
     def get_trajectory(self,  target_speed):
-        if target_speed > self.max_speed:
-            raise ValueError("Requested target velocity exceeds max speed of {:.2f} m/s".format(self.max_speed))
+        # if target_speed > self.max_speed:
+        #     raise ValueError("Requested target velocity exceeds max speed of {:.2f} m/s".format(self.max_speed))
         
         cached_sol = self.cache.load(target_speed)
         if cached_sol is not None and "index" in cached_sol:
@@ -84,7 +84,7 @@ class TossingPlanner:
 
         # Target Constraints at the end of the toss trajectory
         # 1. Position AND Orientation
-        opti.subject_to(funcs["fk"](Q[:, -1])[0:3] == target_pos[0:3])
+        # opti.subject_to(funcs["fk"](Q[:, -1])[0:3] == target_pos[0:3])
         # 2. Velocity
         opti.subject_to(ca.mtimes(funcs["jacobian"](Q[:, -1]), Qd[:, -1])[0:2] == target_vel_vector[0:2])
         # 3. Start State

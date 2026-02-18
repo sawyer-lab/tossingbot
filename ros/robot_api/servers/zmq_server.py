@@ -115,16 +115,28 @@ class RobotServer:
         gazebo_state = {}
         if self.gazebo is not None:
             with self.gazebo._lock:
-                for name, pose in self.gazebo._pose_cache.items():
-                    gazebo_state[name] = {
-                        'position': [pose.position.x,
-                                     pose.position.y,
-                                     pose.position.z],
-                        'orientation': [pose.orientation.x,
-                                        pose.orientation.y,
-                                        pose.orientation.z,
-                                        pose.orientation.w],
-                    }
+                for name in self.gazebo._pose_cache.keys():
+                    pose = self.gazebo._pose_cache.get(name)
+                    twist = self.gazebo._twist_cache.get(name)
+                    
+                    if pose:
+                        gazebo_state[name] = {
+                            'position': [pose.position.x,
+                                         pose.position.y,
+                                         pose.position.z],
+                            'orientation': [pose.orientation.x,
+                                            pose.orientation.y,
+                                            pose.orientation.z,
+                                            pose.orientation.w],
+                        }
+                        
+                        if twist:
+                            gazebo_state[name]['velocity'] = [twist.linear.x,
+                                                               twist.linear.y,
+                                                               twist.linear.z]
+                            gazebo_state[name]['angular_velocity'] = [twist.angular.x,
+                                                                       twist.angular.y,
+                                                                       twist.angular.z]
 
         # Add contact sensor data
         contact_state = None

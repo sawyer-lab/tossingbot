@@ -30,6 +30,7 @@ class GazeboManager:
         """Initialize Gazebo ROS service clients."""
         self._lock = threading.Lock()
         self._pose_cache = {}  # Map: model_name -> Pose (from /gazebo/model_states)
+        self._twist_cache = {}  # Map: model_name -> Twist (velocities)
 
         # ROS service clients
         self.spawn_srv = rospy.ServiceProxy('/gazebo/spawn_sdf_model', SpawnModel)
@@ -47,10 +48,11 @@ class GazeboManager:
             rospy.logwarn("Gazebo spawn service not available")
 
     def _model_states_cb(self, msg):
-        """Cache model poses from /gazebo/model_states topic."""
+        """Cache model poses and twists from /gazebo/model_states topic."""
         with self._lock:
-            for name, pose in zip(msg.name, msg.pose):
+            for name, pose, twist in zip(msg.name, msg.pose, msg.twist):
                 self._pose_cache[name] = pose
+                self._twist_cache[name] = twist
 
     def spawn_sdf(self, model_name, sdf_xml, pose):
         """
