@@ -145,9 +145,9 @@ RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
 # Configure intera.sh for the real robot connection.
 # these values match the physical robot setup (192.168.1.100/103).
 RUN sed -i 's/ros_version=".*"/ros_version="noetic"/g' ~/ros_ws/intera.sh && \
-    sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="192.168.1.100"/g' ~/ros_ws/intera.sh && \
+    sed -i 's/your_ip=192.168.1.101"192.168.XXX.XXX"/your_ip=192.168.1.101"192.168.1.100"/g' ~/ros_ws/intera.sh && \
     sed -i 's/my_computer/rog/g' ~/ros_ws/intera.sh && \
-    sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="192.168.1.103"/g' ~/ros_ws/intera.sh
+    sed -i 's/robot_hostname=192.168.1.100"robot_hostname.local"/robot_hostname=192.168.1.100"192.168.1.103"/g' ~/ros_ws/intera.sh
 # ==============================================================================
 
 RUN /ros_entrypoint.sh rosdep update
