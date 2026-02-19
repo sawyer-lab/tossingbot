@@ -48,14 +48,6 @@ RUN python3 -m pip install --no-cache-dir -r /tmp/robot_api_requirements.txt
 RUN python3 -m pip install --no-cache-dir \
     git+https://github.com/eric-wieser/ros_numpy.git
 
-# Install JetBrains Mono fonts
-# RUN wget -q https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip -O /tmp/JetBrainsMono.zip \
-#     && unzip -q /tmp/JetBrainsMono.zip -d /tmp/JetBrainsMono \
-#     && mkdir -p /usr/share/fonts/truetype/jetbrains-mono \
-#     && cp /tmp/JetBrainsMono/fonts/ttf/*.ttf /usr/share/fonts/truetype/jetbrains-mono/ \
-#     && fc-cache -fv \
-#     && rm -rf /tmp/JetBrainsMono.zip /tmp/JetBrainsMono
-
 # Install ROS packages for robot connectivity
 RUN apt update && apt install --no-install-recommends -y \
     build-essential \
@@ -119,10 +111,6 @@ RUN echo "$USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USER && \
     chmod 0440 /etc/sudoers.d/$USER
 
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USER/.bashrc
-RUN echo "if [ -f /home/$USER/ros_ws/devel/setup.bash ]; then source /home/$USER/ros_ws/devel/setup.bash; fi" >> /home/$USER/.bashrc
-
-COPY init_robot.sh /home/kid/init_robot.sh
-RUN chmod +x /home/kid/init_robot.sh
 
 USER kid
 RUN mkdir -p /home/$USER/ros_ws/src
@@ -143,11 +131,11 @@ RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
 RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
 
 # Configure intera.sh for the real robot connection.
-# these values match the physical robot setup (192.168.1.100/103).
+# these values match the physical robot setup (192.168.1.101/100).
 RUN sed -i 's/ros_version=".*"/ros_version="noetic"/g' ~/ros_ws/intera.sh && \
-    sed -i 's/your_ip=192.168.1.101"192.168.XXX.XXX"/your_ip=192.168.1.101"192.168.1.100"/g' ~/ros_ws/intera.sh && \
+    sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="192.168.1.101"/g' ~/ros_ws/intera.sh && \
     sed -i 's/my_computer/rog/g' ~/ros_ws/intera.sh && \
-    sed -i 's/robot_hostname=192.168.1.100"robot_hostname.local"/robot_hostname=192.168.1.100"192.168.1.103"/g' ~/ros_ws/intera.sh
+    sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="192.168.1.100"/g' ~/ros_ws/intera.sh
 # ==============================================================================
 
 RUN /ros_entrypoint.sh rosdep update
@@ -157,20 +145,9 @@ RUN /ros_entrypoint.sh rosdep update
 ENV GAZEBO_MODEL_PATH=/home/kid/ros_ws/src/custom/environments/models
 
 RUN echo "export GAZEBO_MODEL_PATH=/home/kid/ros_ws/src/custom/environments/models:\$GAZEBO_MODEL_PATH" >> ~/.bashrc
-RUN echo "source devel/setup.bash" >> ~/.bashrc
-RUN echo "source ~/init_robot.sh" >> ~/.bashrc
+RUN echo "if [ -f ~/ros_ws/devel/setup.bash ]; then source ~/ros_ws/devel/setup.bash; fi" >> ~/.bashrc
 
 # ==============================================================================
 # ROBOT API - Production mode (copy into image)
 # ==============================================================================
 # For development: mount robot_api with docker-compose (see docker-compose.yml)
-# For production: uncomment the following to copy robot_api into the image
-
-# USER root
-# COPY robot_api/ /robot_api/
-# RUN chown -R kid:kid /robot_api
-# USER kid
-# ENV PYTHONPATH=/robot_api:$PYTHONPATH
-
-# Default command for production (can be overridden by docker-compose)
-# CMD ["python3", "/robot_api/servers/zmq_server.py"]
