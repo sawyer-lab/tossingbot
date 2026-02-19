@@ -142,16 +142,12 @@ RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
 # ==============================================================================
 RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
 
-# Set only what is safe to bake in at build time.
-# your_ip  = this machine's IP → left as placeholder; init_robot.sh fills it
-#            in at runtime from the HOST_IP env var.
-# robot_hostname = robot's IP/hostname → also filled in at runtime from ROBOT_IP.
-# Setting them to obviously-wrong sentinel values means a mis-configured
-# container fails loudly instead of silently talking to the wrong host.
+# Configure intera.sh for the real robot connection.
+# these values match the physical robot setup (192.168.1.100/103).
 RUN sed -i 's/ros_version=".*"/ros_version="noetic"/g' ~/ros_ws/intera.sh && \
-    sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="PLACEHOLDER_HOST_IP"/g' ~/ros_ws/intera.sh && \
+    sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="192.168.1.100"/g' ~/ros_ws/intera.sh && \
     sed -i 's/my_computer/rog/g' ~/ros_ws/intera.sh && \
-    sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="PLACEHOLDER_ROBOT_IP"/g' ~/ros_ws/intera.sh
+    sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="192.168.1.103"/g' ~/ros_ws/intera.sh
 # ==============================================================================
 
 RUN /ros_entrypoint.sh rosdep update
