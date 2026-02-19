@@ -176,19 +176,28 @@ class ZMQClient:
 
     # ===== Camera Commands =====
 
-    def camera_start(self) -> bool:
+    def camera_start(self, camera=None) -> bool:
         """Start camera streaming."""
-        response = self._send_command('camera_start')
+        kwargs = {}
+        if camera is not None:
+            kwargs['camera'] = camera
+        response = self._send_command('camera_start', **kwargs)
         return response.get('status') == 'ok'
 
-    def camera_stop(self) -> bool:
+    def camera_stop(self, camera=None) -> bool:
         """Stop camera streaming."""
-        response = self._send_command('camera_stop')
+        kwargs = {}
+        if camera is not None:
+            kwargs['camera'] = camera
+        response = self._send_command('camera_stop', **kwargs)
         return response.get('status') == 'ok'
 
-    def camera_get_image(self):
+    def camera_get_image(self, camera=None):
         """Get current camera image as numpy array."""
-        response = self._send_command('camera_get_image')
+        kwargs = {}
+        if camera is not None:
+            kwargs['camera'] = camera
+        response = self._send_command('camera_get_image', **kwargs)
         if response.get('status') == 'ok':
             img_hex = response.get('image')
             if img_hex:
@@ -197,6 +206,14 @@ class ZMQClient:
                 img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 return img
         return None
+
+    def camera_get_state(self, camera=None):
+        """Get camera state dict."""
+        kwargs = {}
+        if camera is not None:
+            kwargs['camera'] = camera
+        response = self._send_command('camera_get_state', **kwargs)
+        return response.get('state') if response.get('status') == 'ok' else None
 
     # ===== Lights Commands =====
 

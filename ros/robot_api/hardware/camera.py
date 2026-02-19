@@ -5,12 +5,18 @@ import numpy as np
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+CAMERA_TOPIC_MAP = {
+    'head': 'head_camera',
+    'hand': 'right_hand_camera',
+}
+
 
 class Camera:
     def __init__(self, camera_name='head_camera'):
         self.camera_name = camera_name
         self.bridge = CvBridge()
         self.current_image = None
+        self._streaming = False
 
         topic = f"/io/internal_camera/{camera_name}/image_raw"
         self.image_sub = rospy.Subscriber(
@@ -25,10 +31,20 @@ class Camera:
         rospy.loginfo(f"Camera: {camera_name} ready, subscribed to {topic}")
 
     def start_streaming(self):
+        self._streaming = True
         return True
 
     def stop_streaming(self):
+        self._streaming = False
         return True
+
+    def get_state(self):
+        return {
+            'camera': self.camera_name,
+            'streaming': self._streaming,
+            'has_image': self.current_image is not None,
+            'topic': f"/io/internal_camera/{self.camera_name}/image_raw",
+        }
 
     def get_image(self):
         if self.current_image is not None:

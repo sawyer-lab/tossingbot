@@ -1,197 +1,222 @@
 #!/usr/bin/env python3
 """
-Gripper - Clean interface for Sawyer gripper control
+Gripper — unified gripper interface for Sawyer.
 
-Intera SDK-style API that hides ROS complexity.
-This class wraps the GripperInterface for use by communication servers.
+Two backends, selected at construction time via mode=:
+
+  mode='real'  (default)  — ClickSmart SmartToolPlate via SimpleClickSmartGripper
+  mode='sim'              — Gazebo electric parallel gripper via right_gripper topics
+
+Both expose the same public API so the ZMQ server is unaffected by the mode.
+
+Usage:
+    gripper = Gripper()            # real hardware
+    gripper = Gripper(mode='sim')  # Gazebo simulation
 """
 
-import rospy
 import json
+
+import rospy
 import sensor_msgs.msg
+
 from intera_core_msgs.msg import IOComponentCommand
 
+from .clicksmart_plate import SimpleClickSmartGripper
 
-class GripperInterface:
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Simulation backend  (Gazebo electric parallel gripper)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class _SimBackend:
+    """Gazebo electric parallel gripper via right_gripper topics + joint_states."""
+
     MAX_POSITION = 0.041667
     MIN_POSITION = 0.0
-    LEFT_FINGER  = 'right_gripper_l_finger_joint'
-    RIGHT_FINGER = 'right_gripper_r_finger_joint'
+    _LEFT  = 'right_gripper_l_finger_joint'
+    _RIGHT = 'right_gripper_r_finger_joint'
 
     def __init__(self):
-        self._cmd_topic = '/io/end_effector/right_gripper/command'
-        self._pub = rospy.Publisher(self._cmd_topic, IOComponentCommand, queue_size=1)
-        self._sub = rospy.Subscriber('/robot/joint_states', sensor_msgs.msg.JointState, self._joint_callback)
-        self._current_width = -1.0
-        self._cmd = IOComponentCommand()
-        self._cmd.op = 'set'
-        rospy.loginfo("GripperInterface: Ready (JointState Mode).")
+        self._pub = rospy.Publisher(
+            '/io/end_effector/right_gripper/command',
+            IOComponentCommand, queue_size=1)
+        rospy.Subscriber('/robot/joint_states',
+                         sensor_msgs.msg.JointState, self._joint_cb)
+        self._width = -1.0
+        rospy.loginfo("Gripper(sim): ready — Gazebo electric parallel gripper")
 
-    def _joint_callback(self, msg):
+    def _joint_cb(self, msg):
         try:
-            if self.LEFT_FINGER in msg.name and self.RIGHT_FINGER in msg.name:
-                idx_l = msg.name.index(self.LEFT_FINGER)
-                idx_r = msg.name.index(self.RIGHT_FINGER)
-                pos_l = msg.position[idx_l]
-                pos_r = msg.position[idx_r]
-                self._current_width = abs(pos_l) + abs(pos_r)
+            if self._LEFT in msg.name and self._RIGHT in msg.name:
+                l = msg.position[msg.name.index(self._LEFT)]
+                r = msg.position[msg.name.index(self._RIGHT)]
+                self._width = abs(l) + abs(r)
         except ValueError:
             pass
 
-    def open(self):
-        self._send_position(self.MAX_POSITION)
+    def _send_position(self, pos):
+        cmd = IOComponentCommand(time=rospy.Time.now(), op='set')
+        cmd.args = json.dumps({'signals': {
+            'position_m': {'format': {'type': 'float'}, 'data': [pos]}}})
+        self._pub.publish(cmd)
 
-    def close(self):
-        self._send_position(self.MIN_POSITION)
+    def open(self):   self._send_position(self.MAX_POSITION)
+    def close(self):  self._send_position(self.MIN_POSITION)
 
-    def set_position(self, position: float):
-        pos = max(self.MIN_POSITION, min(self.MAX_POSITION, position))
-        self._send_position(pos)
+    def set_position(self, pos):
+        self._send_position(max(self.MIN_POSITION, min(self.MAX_POSITION, pos)))
 
-    def _send_position(self, pos_value):
-        cmd_struct = {
-            "signals": {
-                "position_m": {
-                    "format": {"type": "float"},
-                    "data": [pos_value]
-                }
-            }
-        }
-        self._cmd.time = rospy.Time.now()
-        self._cmd.args = json.dumps(cmd_struct)
-        self._pub.publish(self._cmd)
+    def get_position(self):
+        return self._width
 
-    def is_grasping(self) -> bool:
-        width = self.get_current_position()
-        if width < 0: return False
-        if width > 0.002 and width < (self.MAX_POSITION - 0.005):
-            return True
+    def is_grasping(self):
+        return 0.002 < self._width < (self.MAX_POSITION - 0.005) if self._width >= 0 else False
+
+    def get_state(self):
+        return {'position': self.get_position(), 'is_grasping': self.is_grasping(),
+                'mode': 'sim'}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Real hardware backend  (ClickSmart SmartToolPlate)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class _RealBackend:
+    """
+    ClickSmart SmartToolPlate via SimpleClickSmartGripper.
+
+    Discovers the device serial from /io/end_effector/config, activates it,
+    then controls it using EE Signal Type 'grip' (True=close, False=open).
+    """
+
+    MAX_POSITION = 0.041667   # kept for API compatibility; maps to open
+    MIN_POSITION = 0.0        # maps to close
+
+    def __init__(self, device_id: str):
+        rospy.loginfo(f"Gripper(real): initialising ClickSmart device={device_id}")
+        self._plate = SimpleClickSmartGripper(device_id, initialize=True)
+        rospy.loginfo(f"Gripper(real): ready  endpoints={self._plate.list_endpoint_names()}")
+
+    def _set_grip(self, value: bool):
+        for ep in self._plate.list_endpoint_names():
+            self._plate.set_ee_signal_value('grip', value, endpoint_id=ep)
+
+    def open(self):   self._set_grip(True)
+    def close(self):  self._set_grip(False)
+
+    def set_position(self, pos: float):
+        """Binary: pos <= 0.0 → close, pos > 0.0 → open."""
+        self._set_grip(pos > 0.0)
+
+    def get_position(self):
+        """MAX_POSITION when open, 0.0 when closed, -1.0 if unknown."""
+        ep = self._plate.list_endpoint_names()
+        if not ep:
+            return -1.0
+        v = self._plate.get_ee_signal_value('grip', endpoint_id=ep[0])
+        if v is None:
+            return -1.0
+        return self.MAX_POSITION if v else 0.0
+
+    def is_grasping(self):
+        """True when grip signals are inactive (closed = gripping)."""
+        for ep in self._plate.list_endpoint_names():
+            if not self._plate.get_ee_signal_value('grip', endpoint_id=ep):
+                return True
         return False
 
-    def get_current_position(self) -> float:
-        return self._current_width
+    def get_state(self):
+        return {
+            'position':   self.get_position(),
+            'is_grasping': self.is_grasping(),
+            'device':     self._plate.name,
+            'endpoints':  self._plate.list_endpoint_names(),
+            'signals':    {k: v['data'] for k, v in self._plate.get_all_signals().items()},
+            'mode':       'real',
+        }
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Facade
+# ──────────────────────────────────────────────────────────────────────────────
 
 class Gripper:
     """
-    Clean gripper interface - Intera SDK style
+    Unified gripper interface for real hardware and Gazebo simulation.
 
-    Provides simple methods for gripper control without exposing ROS internals.
-    Designed to be used by communication servers (ZMQ, HTTP, WebSocket).
+    Args:
+        mode:      'real' (default) or 'sim'
+        device_id: ClickSmart device serial (real mode only).
+                   Defaults to 'stp_021709TP00448'.
     """
 
-    def __init__(self):
-        """Initialize gripper interface."""
-        rospy.loginfo("Gripper: Initializing...")
-        self._gripper = GripperInterface()
-        rospy.sleep(0.5)  # Allow time for first state callback
-        rospy.loginfo("Gripper: Ready")
+    def __init__(self, mode: str = 'real', device_id: str = 'stp_021709TP00448'):
+        rospy.loginfo(f"Gripper: initialising (mode={mode})")
+        if mode == 'sim':
+            self._backend = _SimBackend()
+        else:
+            self._backend = _RealBackend(device_id)
+        rospy.sleep(0.5)
+        rospy.loginfo("Gripper: ready")
 
     def open(self) -> bool:
-        """
-        Open the gripper fully.
-
-        Returns:
-            True if command sent successfully
-        """
         try:
-            self._gripper.open()
-            rospy.sleep(1.0)  # Allow time for gripper to open
+            self._backend.open()
+            rospy.sleep(1.0)
             return True
         except Exception as e:
-            rospy.logerr(f"Gripper.open: Error - {e}")
+            rospy.logerr(f"Gripper.open: {e}")
             return False
 
     def close(self) -> bool:
-        """
-        Close the gripper fully (or until it grasps an object).
-
-        Returns:
-            True if command sent successfully
-        """
         try:
-            self._gripper.close()
-            rospy.sleep(1.0)  # Allow time for gripper to close
+            self._backend.close()
+            rospy.sleep(1.0)
             return True
         except Exception as e:
-            rospy.logerr(f"Gripper.close: Error - {e}")
+            rospy.logerr(f"Gripper.close: {e}")
             return False
 
+    def release(self) -> None:
+        """Non-blocking open — used during toss trajectory for zero-latency release."""
+        self._backend.open()
+
     def set_position(self, position: float) -> bool:
-        """
-        Set gripper to a specific position.
-
-        Args:
-            position: Gripper width in meters (0.0 = closed, 0.041667 = fully open)
-
-        Returns:
-            True if command sent successfully
-        """
         try:
-            self._gripper.set_position(position)
-            rospy.sleep(1.0)  # Allow time for gripper to move
+            self._backend.set_position(position)
+            rospy.sleep(1.0)
             return True
         except Exception as e:
-            rospy.logerr(f"Gripper.set_position: Error - {e}")
+            rospy.logerr(f"Gripper.set_position: {e}")
             return False
 
     def is_grasping(self) -> bool:
-        """
-        Check if gripper is currently holding an object.
-
-        Returns:
-            True if gripper appears to be grasping something
-        """
-        return self._gripper.is_grasping()
+        return self._backend.is_grasping()
 
     def get_position(self) -> float:
-        """
-        Get current gripper position.
-
-        Returns:
-            Current gripper width in meters (-1.0 if unknown)
-        """
-        return self._gripper.get_current_position()
+        return self._backend.get_position()
 
     def get_state(self) -> dict:
-        """
-        Get complete gripper state.
-
-        Returns:
-            Dict with position and grasping status
-        """
-        return {
-            'position': self.get_position(),
-            'is_grasping': self.is_grasping(),
-        }
+        return self._backend.get_state()
 
 
 if __name__ == "__main__":
-    """Simple test of Gripper interface"""
+    import sys
+    mode = sys.argv[1] if len(sys.argv) > 1 else 'real'
     rospy.init_node("gripper_test")
 
-    gripper = Gripper()
+    gripper = Gripper(mode=mode)
+    print(f"\n[init] {gripper.get_state()}")
 
-    # Test open
     print("\n[1] Opening gripper...")
     gripper.open()
-    print(f"    Position: {gripper.get_position():.5f} m")
-    print(f"    Grasping: {gripper.is_grasping()}")
+    print(f"    position={gripper.get_position():.5f}  grasping={gripper.is_grasping()}")
 
-    # Test close
     print("\n[2] Closing gripper...")
     gripper.close()
-    print(f"    Position: {gripper.get_position():.5f} m")
-    print(f"    Grasping: {gripper.is_grasping()}")
+    print(f"    position={gripper.get_position():.5f}  grasping={gripper.is_grasping()}")
 
-    # Test halfway
-    print("\n[3] Setting to halfway position...")
-    gripper.set_position(0.02)
-    print(f"    Position: {gripper.get_position():.5f} m")
-    print(f"    Grasping: {gripper.is_grasping()}")
-
-    # Open again
-    print("\n[4] Opening gripper...")
+    print("\n[3] Opening gripper (leave safe)...")
     gripper.open()
 
     print("\n[PASS] Test complete")

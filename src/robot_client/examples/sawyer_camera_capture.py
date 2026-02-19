@@ -5,19 +5,19 @@ Sawyer Camera Capture
 Live viewer for the Sawyer robot's internal cameras.
 The robot has two cameras — you choose which one to use at startup.
 
-    head  - camera mounted on the robot's head (wider view of workspace)
-    hand  - camera mounted on the wrist / end-effector (close-up view)
+    head  - camera mounted on the robot's head  (/io/internal_camera/head_camera/image_raw)
+    hand  - wrist / end-effector camera          (/io/internal_camera/right_hand_camera/image_raw)
 
 Controls:
     s  - save current frame to /tmp/sawyer_<camera>_XXXX.jpg
     q  - quit
 """
 import sys
+import time
 sys.path.insert(0, '/home/fausto/Projects/tossingbot/src')
 
 from robot_client import CameraClient
 import cv2
-import time
 
 
 def choose_camera():
@@ -38,18 +38,32 @@ def choose_camera():
 
 def main():
     camera = choose_camera()
-    print(f"\nUsing {camera} camera")
+    print(f"\nUsing '{camera}' camera")
 
     print("Connecting to robot...")
     cam = CameraClient(protocol='zmq', host='localhost')
 
+    # Check camera state before starting
+    state = cam.get_state(camera=camera)
+    if state is None:
+        print("ERROR: could not reach ZMQ server. Is the container running?")
+        sys.exit(1)
+    print(f"Camera state: topic={state.get('topic')}  has_image={state.get('has_image')}")
+
     print(f"Enabling {camera} camera...")
     if not cam.start(camera=camera):
-        print("ERROR: failed to enable camera. Is the ZMQ server running?")
+        print("ERROR: failed to enable camera.")
         sys.exit(1)
 
     print("Waiting for first frame...")
-    time.sleep(2.0)
+    for i in range(20):
+        time.sleep(0.2)
+        state = cam.get_state(camera=camera)
+        if state and state.get('has_image'):
+            print(f"  Frame available after {(i+1)*0.2:.1f}s")
+            break
+    else:
+        print("  WARNING: no frame received yet, continuing anyway...")
 
     print(f"\nStreaming {camera} camera — press 's' to save, 'q' to quit\n")
 

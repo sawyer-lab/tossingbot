@@ -81,3 +81,19 @@ class RobotClient(BaseClient):
             bool: Success
         """
         return self._client.execute_toss_trajectory(Q, Qd, Qdd, release_index)
+
+    def gripper_open(self) -> bool:
+        """Open the gripper fully."""
+        return self._client.gripper_open()
+
+    def gripper_close(self) -> bool:
+        """Close the gripper."""
+        return self._client.gripper_close()
+
+    def gripper_set_position(self, position: float) -> bool:
+        """Set gripper position (0.0=closed, 0.041667=open)."""
+        return self._client.gripper_set_position(position)
+
+    def gripper_get_state(self) -> Dict:
+        """Get gripper state dict."""
+        return self._client.gripper_get_state()

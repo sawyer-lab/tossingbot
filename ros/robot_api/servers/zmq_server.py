@@ -23,7 +23,7 @@ sys.path.insert(0, '/robot_api')
 
 from hardware.robot import Robot
 from hardware.gripper import Gripper
-from hardware.camera import Camera
+from hardware.camera import Camera, CAMERA_TOPIC_MAP
 from hardware.lights import Lights
 from hardware.head import Head
 from hardware.head_display import HeadDisplay
@@ -57,8 +57,11 @@ class RobotServer:
         rospy.loginfo("Initializing Gripper...")
         self.gripper = Gripper()
 
-        rospy.loginfo("Initializing Camera...")
-        self.camera = Camera("head_camera")
+        rospy.loginfo("Initializing Cameras...")
+        self.cameras = {
+            'head': Camera('head_camera'),
+            'hand': Camera('right_hand_camera'),
+        }
 
         rospy.loginfo("Initializing Lights...")
         self.lights = Lights()
@@ -183,6 +186,14 @@ class RobotServer:
 
         rospy.loginfo("State publisher thread stopped")
 
+    def _get_camera(self, data):
+        """Return the Camera instance for the requested camera name (default: head)."""
+        name = data.get('camera', 'head')
+        if name not in self.cameras:
+            rospy.logwarn(f"Unknown camera '{name}', falling back to 'head'")
+            name = 'head'
+        return self.cameras[name]
+
     def handle_command(self, message):
         """
         Process incoming command and return response.
@@ -259,9 +270,7 @@ class RobotServer:
                 rate = rospy.Rate(100)
 
                 def _fire_gripper():
-                    self.gripper._gripper._send_position(
-                        self.gripper._gripper.MAX_POSITION
-                    )
+                    self.gripper.release()
 
                 N = len(Q)
                 for k in range(N):
@@ -304,18 +313,25 @@ class RobotServer:
 
             # ===== Camera Commands =====
             elif command == 'camera_start':
-                success = self.camera.start_streaming()
+                cam = self._get_camera(message)
+                success = cam.start_streaming()
                 return {'status': 'ok' if success else 'error'}
 
             elif command == 'camera_stop':
-                success = self.camera.stop_streaming()
+                cam = self._get_camera(message)
+                success = cam.stop_streaming()
                 return {'status': 'ok' if success else 'error'}
 
             elif command == 'camera_get_image':
-                image_bytes = self.camera.get_image_compressed()
+                cam = self._get_camera(message)
+                image_bytes = cam.get_image_compressed()
                 if image_bytes:
                     return {'status': 'ok', 'image': image_bytes.hex()}
                 return {'status': 'error', 'message': 'No image available'}
+
+            elif command == 'camera_get_state':
+                cam = self._get_camera(message)
+                return {'status': 'ok', 'state': cam.get_state()}
 
             # ===== Lights Commands =====
             elif command == 'lights_list':
