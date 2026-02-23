@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 import numpy as np
-import config as cfg
+from tossingbot import config as cfg
 
 @dataclass
 class PlannerConfig:
