@@ -1,4 +1,3 @@
-
 import os
 import time
 import argparse
@@ -8,22 +7,23 @@ import pybullet_data
 from tossingbot.tossing.motion_planner import TossingPlanner
 from tossingbot import config as cfg
 
-def run_toss_sim(speed=1.5):
+def run_toss_sim(speed=3.5):
     # 1. Setup PyBullet
     physicsClient = p.connect(p.GUI)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setGravity(0, 0, -9.81)
     
     # Match physics step to planner dt
-    dt = 0.01 # We'll set this explicitly
+    dt = 0.01 
     p.setTimeStep(dt)
     
     p.loadURDF("plane.urdf")
     
-    # Resolve URDF
+    # Resolve the correct PYBULLET URDF path
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    urdf_path = os.path.join(script_dir, "urdf", "sawyer_tabletop_pneumatic.urdf")
+    urdf_path = os.path.join(script_dir, "urdf", "sawyer_tabletop_pneumatic_pybullet.urdf")
     
+    print(f"Loading {urdf_path}...")
     robot_id = p.loadURDF(urdf_path, [0, 0, 0], useFixedBase=True)
     
     # 2. Map Joints and Links
@@ -47,7 +47,7 @@ def run_toss_sim(speed=1.5):
         p.resetJointState(robot_id, joint_indices[i], q)
         
     q0_3dof = np.array([cfg.TOSS_READY_POS[1], cfg.TOSS_READY_POS[3], cfg.TOSS_READY_POS[5]])
-    toss_planner = TossingPlanner(profile="express", angle_deg=45, q0=q0_3dof)
+    toss_planner = TossingPlanner(profile="express", angle_deg=45, q0=q0_3dof, xT=np.array([0.95, 0.0, 0.65]))
     
     sol_3d = toss_planner.get_trajectory(speed)
     sol_7d = toss_planner.map_to_7dof(
@@ -63,39 +63,31 @@ def run_toss_sim(speed=1.5):
     # Trajectory Data
     Q_traj = sol_7d['Q']
     V_traj = sol_7d['Qd']
-    dt = toss_planner.dt # usually 0.01s (100Hz)
     
     num_steps = Q_traj.shape[0]
     tip_link_idx = link_map["right_gripper_tip"]
     
-    actual_vels = []
-    
     try:
         # Step through the trajectory
         for k in range(num_steps):
-            # Target Velocities for this step
             target_vels = V_traj[k]
             
-            # Apply Velocity Control to all 7 joints
             for i, joint_idx in enumerate(joint_indices):
                 p.setJointMotorControl2(
                     bodyIndex=robot_id,
                     jointIndex=joint_idx,
                     controlMode=p.VELOCITY_CONTROL,
                     targetVelocity=target_vels[i],
-                    force=200 # Max effort
+                    force=200
                 )
             
             p.stepSimulation()
             
             # Measure Actual Tip Velocity
-            # computeLinkVelocity=1 ensures we get linear/angular velocity in world frame
             state = p.getLinkState(robot_id, tip_link_idx, computeLinkVelocity=1)
             linear_vel = state[6]
             speed_mag = np.linalg.norm(linear_vel)
-            actual_vels.append(speed_mag)
             
-            # We must sleep to match the planner's dt
             time.sleep(dt)
             
             if k == sol_3d["index"]:
@@ -110,7 +102,7 @@ def run_toss_sim(speed=1.5):
             time.sleep(1./240.)
             
     except KeyboardInterrupt:
-        print("Exiting...")
+        print("\nExiting...")
     finally:
         p.disconnect()
 

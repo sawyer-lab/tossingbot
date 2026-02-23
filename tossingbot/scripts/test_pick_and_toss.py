@@ -88,12 +88,13 @@ def run_pick_and_toss():
         robot.arm.move(JointAngles(*cfg.TOSS_READY_POS))
         time.sleep(0.5)
         
-        # Plan Tossing Trajectory (Simplified 1.5 m/s toss)
+        # Plan Tossing Trajectory (Optimized 3.5 m/s toss)
         q_curr = np.array(robot.arm.get_joints().to_list())
         q0_3dof = np.array([q_curr[1], q_curr[3], q_curr[5]]) # J1, J3, J5
-        toss_planner = TossingPlanner(profile="express", angle_deg=45, q0=q0_3dof)
+        # Use optimal release target found in grid search: [0.95, 0.0, 0.65]
+        toss_planner = TossingPlanner(profile="express", angle_deg=45, q0=q0_3dof, xT=np.array([0.95, 0.0, 0.65]))
         
-        speed = 1.5
+        speed = 3.5
         sol_3d = toss_planner.get_trajectory(speed)
         sol_7d = toss_planner.map_to_7dof(
             sol_3d["Q"], sol_3d["Qd"], sol_3d["Qdd"],
