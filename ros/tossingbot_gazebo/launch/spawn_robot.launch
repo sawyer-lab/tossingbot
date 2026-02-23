@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- Gazebo arguments -->
+  <arg name="paused" default="false"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="debug" default="false"/>
+  <arg name="world_name" default="two_table.world"/>
+  <arg name="load_gazebo" default="true"/>
+
+  <!-- Robot arguments -->
+  <arg name="pneumatic_gripper" default="true"/>
+  <arg name="pedestal" default="false"/>
+  <arg name="static" default="true"/>
+  <arg name="platform_height" default="1.0"/>
+  <arg name="cameras" default="true"/>
+  <arg name="finger_pads_file" default="$(find tossingbot_gripper_description)/urdf/finger_pads_flat.xacro"/>
+  <arg name="head_display_img" default="$(find sawyer_gazebo)/share/images/sawyer_sdk_research.png"/>
+
+  <!-- Initial joint states -->
+  <arg name="initial_joint_states"
+    default=" -J sawyer::right_j0 -0.27
+              -J sawyer::right_j1 -0.60
+              -J sawyer::right_j2 0.00
+              -J sawyer::right_j3 0.00
+              -J sawyer::right_j4 0.00
+              -J sawyer::right_j5 0.00
+              -J sawyer::right_j6 0.00
+              -J sawyer::head_pan 0.00"/>
+
+  <param name="img_path_head_display" value="$(arg head_display_img)"/>
+
+  <!-- Load the URDF into the ROS Parameter Server -->
+  <arg name="load_robot_description" default="true"/>
+  <param if="$(arg load_robot_description)" name="robot_description"
+      command="$(find xacro)/xacro --inorder $(find tossingbot_description)/urdf/tossingbot_main.urdf.xacro
+      gazebo:=true pneumatic_gripper:=$(arg pneumatic_gripper)
+      pedestal:=$(arg pedestal) static:=$(arg static) cameras:=$(arg cameras)
+      finger_pads_file:=$(arg finger_pads_file)"/>
+
+  <!-- Load Sawyer Parameters -->
+  <rosparam command="load" file="$(find sawyer_gazebo)/config/config.yaml" />
+  <rosparam command="load" file="$(find sawyer_description)/params/named_poses.yaml" />
+  <rosparam command="load" file="$(find sawyer_gazebo)/config/acceleration_limits.yaml" />
+  
+  <!-- Load TossingBot specific PID overrides (High gains for heavy EE) -->
+  <rosparam command="load" file="$(find tossingbot_gazebo)/config/pid_gains.yaml" />
+  
+  <param name="robot/limb/right/root_name" value="base" />
+  <param name="robot/limb/right/tip_name" value="$(eval 'right_gripper_tip' if arg('pneumatic_gripper') else 'right_hand')" />
+  <param name="robot/limb/right/camera_name" value="right_hand_camera" />
+  <param name="robot/limb/right/gravity_tip_name" value="$(eval 'right_gripper_tip' if arg('pneumatic_gripper') else 'right_hand')" />
+
+  <!-- Launch Gazebo -->
+  <include if="$(arg load_gazebo)" file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find tossingbot_environments)/worlds/$(arg world_name)"/>
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="headless" value="$(arg headless)"/>
+  </include>
+
+  <!-- World to Base Transform -->
+  <node if="$(arg static)" pkg="tf2_ros" type="static_transform_publisher"
+	name="base_to_world" args="0 0 $(arg platform_height) 0 0 0 1 world base" />
+
+  <!-- Spawn Robot -->
+  <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+	args="-param robot_description -urdf -z $(arg platform_height) -model sawyer $(arg initial_joint_states)" />
+
+  <!-- Controllers (We still pass electric_gripper because the standard controller launch expects it) -->
+  <include file="$(find sawyer_sim_controllers)/launch/sawyer_sim_controllers.launch">
+      <arg name="electric_gripper" value="$(arg pneumatic_gripper)"/>
+      <arg name="gui" value="$(arg gui)" />
+  </include>
+
+  <!-- Sawyer standard cameras -->
+  <arg name="wrist_camera" default="right_hand_camera" />
+  <arg name="head_camera"  default="head_camera" />
+  <include file="$(find sawyer_gazebo)/launch/sawyer_sim_cameras.launch">
+      <arg name="wrist_camera" value="$(arg wrist_camera)" />
+      <arg name="head_camera" value="$(arg head_camera)" />
+  </include>
+
+  <!-- Robot IO Bag -->
+  <node pkg="rosbag" type="play" name="io_robot" args="-l $(find sawyer_gazebo)/share/bags/robot_io.bag" />
+
+</launch>

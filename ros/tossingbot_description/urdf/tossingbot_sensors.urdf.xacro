@@ -1,0 +1,23 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find tossingbot_description)/urdf/kinetic_rgb.urdf.xacro"/>
+
+  <xacro:property name="deg_to_rad" value="0.01745329251994329577"/>
+
+  <!-- Left Camera attached to base -->
+  <xacro:macro name="tossingbot_cameras" params="parent">
+    <xacro:kinetic_rgb name="rgbd_camera_right" parent="${parent}">
+        <!-- Offset cameras relative to the parent root (now 'base') -->
+        <!-- Since robot is at Z=1.0, and cameras were at Z=1.35 globally, offset is 0.35 -->
+        <origin xyz="0.55 -0.2637 0.35" rpy="${0.0 * deg_to_rad} ${50.0 * deg_to_rad} ${90.0 * deg_to_rad}"/>
+        <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
+    </xacro:kinetic_rgb>
+
+    <xacro:kinetic_rgb name="rgbd_camera_left" parent="${parent}">
+        <origin xyz="0.55 0.5363 0.35" rpy="${0.0 * deg_to_rad} ${50.0 * deg_to_rad} ${-90.0 * deg_to_rad}"/>
+        <origin xyz="0 0 0" rpy="${-90 * deg_to_rad} ${0 * deg_to_rad} ${-90 * deg_to_rad}" />
+    </xacro:kinetic_rgb>
+  </xacro:macro>
+
+</robot>

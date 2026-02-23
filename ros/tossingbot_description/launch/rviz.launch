@@ -1,0 +1,27 @@
+<?xml version = "1.0"?>
+
+<launch>
+    <!-- Arguments to toggle features -->
+    <arg name="cameras" default="true"/>
+    <arg name="pneumatic_gripper" default="true"/>
+    <arg name="use_gui" default="true"/>
+    <arg name="finger_pads_file" default="$(find tossingbot_gripper_description)/urdf/finger_pads_flat.xacro"/>
+
+    <!-- Load the modular robot description -->
+    <param name="robot_description" 
+           command="$(find xacro)/xacro --inorder $(find tossingbot_description)/urdf/tossingbot_main.urdf.xacro 
+                    cameras:=$(arg cameras) 
+                    pneumatic_gripper:=$(arg pneumatic_gripper) 
+                    finger_pads_file:=$(arg finger_pads_file)
+                    gazebo:=false" />
+
+    <!-- Read the joint value-->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"  />
+
+    <!-- Visualize in Rviz-->
+    <node name="rviz" pkg="rviz" type="rviz" args = "-d $(find tossingbot_description)/config/config.rviz"/>
+
+    <!-- Joint state publishers -->
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"  output="screen" unless="$(arg use_gui)" />
+    <node name="joint_state_publisher_gui" pkg="joint_state_publisher_gui" type="joint_state_publisher_gui"  output="screen" if="$(arg use_gui)" />
+</launch>

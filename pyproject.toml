@@ -7,13 +7,11 @@ name = "tossingbot"
 version = "1.0.0"
 requires-python = ">=3.8"
 dependencies = [
-    "pyzmq>=25.0.0",
-    "requests>=2.25.0",
-    "python-socketio>=5.0.0",
+    "robot-client",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+packages = ["tossingbot"]
 
 [tool.pylance]
-include = ["src"]
+include = ["tossingbot"]

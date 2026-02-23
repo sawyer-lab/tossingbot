@@ -23,11 +23,12 @@ services:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - DISABLE_ROS1_EOL_WARNINGS=1
       # Force NVIDIA GPU for OpenGL/Vulkan (Gazebo)
       - __NV_PRIME_RENDER_OFFLOAD=1
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
       - __VK_LAYER_NV_optimus=NVIDIA_only
-      - PYTHONPATH=/home/kid/ros_ws/src/custom/robot_api:/tossing_system/src:$PYTHONPATH
+      - PYTHONPATH=/home/kid/ros_ws/src/sawyer-robot/robot_api:/tossing_system/src:$PYTHONPATH
       - ROS_MASTER_URI=http://192.168.1.100:11311
       - ROS_IP=192.168.1.101
       - ROS_HOSTNAME=192.168.1.101
@@ -38,9 +39,9 @@ services:
       - 021607CP00070.local:192.168.1.100
     volumes:
       - ./ros:/home/kid/ros_ws/src/custom
+      - ../sawyer-robot:/home/kid/ros_ws/src/sawyer-robot
       - ./src:/tossing_system/src
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
     stdin_open: true
     tty: true
-    command: /bin/bash

@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<robot name="tossingbot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Arguments are global in Xacro -->
+  <xacro:arg name="gazebo" default="false"/>
+  <xacro:arg name="pedestal" default="false"/>
+  <xacro:arg name="static" default="true"/>
+  <xacro:arg name="pneumatic_gripper" default="true"/>
+  <xacro:arg name="cameras" default="true"/>
+  <xacro:arg name="finger_pads_file" default="$(find tossingbot_gripper_description)/urdf/finger_pads_flat.xacro"/>
+
+  <!-- Include Global Materials First (Prevents duplication) -->
+  <xacro:include filename="$(find tossingbot_gripper_description)/urdf/materials.xacro" />
+
+  <!-- Include Base Robot + Gripper -->
+  <xacro:include filename="$(find tossingbot_description)/urdf/tossingbot_base.urdf.xacro" />
+
+  <!-- Include Sensors (Attached to base frame, NOT world to avoid uniqueness conflicts) -->
+  <xacro:if value="$(arg cameras)">
+    <xacro:include filename="$(find tossingbot_description)/urdf/tossingbot_sensors.urdf.xacro"/>
+    <!-- Attach to 'base' link which is provided by sawyer_base.urdf.xacro -->
+    <xacro:tossingbot_cameras parent="base"/>
+  </xacro:if>
+
+</robot>

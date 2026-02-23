@@ -111,43 +111,12 @@ RUN echo "$USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USER && \
     chmod 0440 /etc/sudoers.d/$USER
 
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USER/.bashrc
+ENV DISABLE_ROS1_EOL_WARNINGS=1
 
+USER root
+COPY setup_ros.sh /setup_ros.sh
+RUN chmod +x /setup_ros.sh
 USER kid
-RUN mkdir -p /home/$USER/ros_ws/src
-WORKDIR /home/$USER/ros_ws
-RUN /ros_entrypoint.sh catkin_make
 
-RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool init .
-RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_robot.git -b release-5.2.0
-RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sawyer_simulator.git -b release-5.2.0
-RUN cd ~/ros_ws/src; git clone https://github.com/sawyer-lab/sns_ik.git -b melodic-devel
-
-RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool merge sawyer_simulator/sawyer_simulator.rosinstall
-RUN cd ~/ros_ws/src; /ros_entrypoint.sh wstool update
-
-# ==============================================================================
-# NETWORK CONFIGURATION - HARDCODED
-# ==============================================================================
-RUN cp ~/ros_ws/src/intera_sdk/intera.sh ~/ros_ws/.
-
-# Configure intera.sh for the real robot connection.
-# these values match the physical robot setup (192.168.1.101/100).
-RUN sed -i 's/ros_version=".*"/ros_version="noetic"/g' ~/ros_ws/intera.sh && \
-    sed -i 's/your_ip="192.168.XXX.XXX"/your_ip="192.168.1.101"/g' ~/ros_ws/intera.sh && \
-    sed -i 's/my_computer/rog/g' ~/ros_ws/intera.sh && \
-    sed -i 's/robot_hostname="robot_hostname.local"/robot_hostname="192.168.1.100"/g' ~/ros_ws/intera.sh
-# ==============================================================================
-
-RUN /ros_entrypoint.sh rosdep update
-
-# Set GAZEBO_MODEL_PATH as environment variable (available to all processes)
-# Use absolute path to ensure it's always correct
-ENV GAZEBO_MODEL_PATH=/home/kid/ros_ws/src/custom/environments/models
-
-RUN echo "export GAZEBO_MODEL_PATH=/home/kid/ros_ws/src/custom/environments/models:\$GAZEBO_MODEL_PATH" >> ~/.bashrc
-RUN echo "if [ -f ~/ros_ws/devel/setup.bash ]; then source ~/ros_ws/devel/setup.bash; fi" >> ~/.bashrc
-
-# ==============================================================================
-# ROBOT API - Production mode (copy into image)
-# ==============================================================================
-# For development: mount robot_api with docker-compose (see docker-compose.yml)
+ENTRYPOINT ["/setup_ros.sh"]
+CMD ["/bin/bash"]
