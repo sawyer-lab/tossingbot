@@ -1,4 +1,3 @@
-
 import os
 import xml.etree.ElementTree as ET
 import yourdfpy
@@ -12,30 +11,27 @@ def clean_merge(base_path, tool_path, output_path, mounting_link='right_hand'):
     base_root = base_tree.getroot()
     tool_root = tool_tree.getroot()
     
-    # Ensure robot name is consistent
-    base_root.set('name', 'sawyer')
-    
     # Identify Tool Root
-    tool_links = {l.get('name') for l in tool_root.findall('.//link')}
-    
+    tool_links_all = {l.get('name') for l in tool_root.findall('.//link')}
     tool_children = set()
     for j in tool_root.findall('.//joint'):
-        child_el = j.find('child')
-        if child_el is not None:
-            tool_children.add(child_el.get('link'))
-            
-    tool_potential_roots = tool_links - tool_children
+        c = j.find('child')
+        if c is not None: tool_children.add(c.get('link'))
+    tool_potential_roots = tool_links_all - tool_children
     
-    if 'right_gripper_base' in tool_links:
+    if 'right_gripper_base' in tool_links_all:
         tool_root_link = 'right_gripper_base'
     elif tool_potential_roots:
         tool_root_link = sorted(list(tool_potential_roots), key=len)[0]
     else:
-        tool_root_link = list(tool_links)[0]
+        tool_root_link = list(tool_links_all)[0]
         
     print(f"  Tool Root detected: {tool_root_link}")
     
-    # 2. Add common materials that might be missing (like TossingBot/Black)
+    # 2. Setup New Robot
+    new_robot = ET.Element('robot', {'name': 'sawyer'})
+    
+    # Common Materials
     common_materials = [
         ('TossingBot/Black', '0 0 0 1'),
         ('TossingBot/Gray', '0.5 0.5 0.5 1'),
@@ -46,60 +42,63 @@ def clean_merge(base_path, tool_path, output_path, mounting_link='right_hand'):
         ('TossingBot/LightGray', '0.8 0.8 0.8 1'),
         ('TossingBot/White', '1 1 1 1'),
         ('TossingBot/Red', '1 0 0 1'),
-        ('TossingBot/Green', '0 1 0 1'),
-        ('TossingBot/Blue', '0 0 1 1'),
         ('black', '0.05 0.05 0.05 1'),
+        ('sawyer_red', '0.5 0.1 0.1 1'),
+        ('darkred', '0.5 0.1 0.1 1'),
+        ('darkgray', '0.35 0.35 0.35 1'),
+        ('sawyer_gray', '0.75 0.75 0.75 1'),
     ]
-    
-    # Track all material names from base and tool
-    all_source_mats = {m.get('name') for m in base_root.findall('.//material')}
-    all_source_mats.update({m.get('name') for m in tool_root.findall('.//material')})
-
-    new_robot = ET.Element('robot', {'name': 'sawyer'})
     
     added_mats = set()
     for name, rgba in common_materials:
-        if name not in all_source_mats:
-            mat = ET.SubElement(new_robot, 'material', {'name': name})
-            ET.SubElement(mat, 'color', {'rgba': rgba})
-            added_mats.add(name)
-        else:
-            # Still track it so we don't add it again if it appears in base/tool
-            added_mats.add(name)
+        mat = ET.SubElement(new_robot, 'material', {'name': name})
+        ET.SubElement(mat, 'color', {'rgba': rgba})
+        added_mats.add(name)
 
-    # Trackers
+    # 3. Add Elements
     base_link_names = {l.get('name') for l in base_root.findall('.//link')}
     base_joint_names = {j.get('name') for j in base_root.findall('.//joint')}
     
-    # Add from base
+    # From Base
     for child in list(base_root):
         if child.tag == 'material':
-            name = child.get('name')
-            if name in added_mats: continue
-            added_mats.add(name)
+            if child.get('name') in added_mats: continue
+            added_mats.add(child.get('name'))
         new_robot.append(child)
         
-    # Add from tool
+    # From Tool
     for child in list(tool_root):
         if child.tag == 'material':
             if child.get('name') in added_mats: continue
+            added_mats.add(child.get('name'))
         elif child.tag == 'link':
             if child.get('name') in base_link_names: continue
         elif child.tag == 'joint':
-            if child.find('child').get('link') == tool_root_link:
-                continue
             if child.get('name') in base_joint_names: continue
-            
+            # Remove redundant internal tool joint pointing to its own root
+            if child.find('child').get('link') == tool_root_link: continue
+        elif child.tag in ['transmission', 'gazebo']:
+            pass # We'll add them later
+        else:
+            continue
         new_robot.append(child)
-        
-    # 3. Connection
+
+    # 4. Cleanup Artifacts (spheres)
+    for link in new_robot.findall('.//link'):
+        for coll in link.findall('collision'):
+            geom = coll.find('geometry')
+            if geom is not None and geom.find('sphere') is not None:
+                print(f"  Removing sphere collision from {link.get('name')}")
+                link.remove(coll)
+
+    # 5. Connect
     conn_name = f"attachment_{mounting_link}_to_{tool_root_link}"
     conn = ET.SubElement(new_robot, 'joint', {'name': conn_name, 'type': 'fixed'})
     ET.SubElement(conn, 'parent', {'link': mounting_link})
     ET.SubElement(conn, 'child', {'link': tool_root_link})
     ET.SubElement(conn, 'origin', {'xyz': '0 0 0', 'rpy': '0 0 0'})
     
-    # 4. Save and Verify
+    # 6. Save and Verify
     ET.ElementTree(new_robot).write(output_path, xml_declaration=True, encoding='UTF-8')
     try:
         yourdfpy.URDF.load(output_path)

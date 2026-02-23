@@ -1,13 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<robot name="sawyer"><material name="TossingBot/Black"><color rgba="0 0 0 1" /></material><material name="TossingBot/Gray"><color rgba="0.5 0.5 0.5 1" /></material><material name="TossingBot/Grey"><color rgba="0.5 0.5 0.5 1" /></material><material name="TossingBot/DarkGrey"><color rgba="0.2 0.2 0.2 1" /></material><material name="TossingBot/DarkGray"><color rgba="0.2 0.2 0.2 1" /></material><material name="TossingBot/LightGrey"><color rgba="0.8 0.8 0.8 1" /></material><material name="TossingBot/LightGray"><color rgba="0.8 0.8 0.8 1" /></material><material name="TossingBot/White"><color rgba="1 1 1 1" /></material><material name="TossingBot/Red"><color rgba="1 0 0 1" /></material><material name="TossingBot/Green"><color rgba="0 1 0 1" /></material><material name="TossingBot/Blue"><color rgba="0 0 1 1" /></material><material name="darkgray">
-    <color rgba=".2 .2 .2 1" />
-  </material><material name="darkred">
-    <color rgba=".5 .1 .1 1" />
-  </material><material name="sawyer_red">
-    <color rgba=".5 .1 .1 1" />
-  </material><material name="sawyer_gray">
-    <color rgba="0.75294 0.75294 0.75294 1" />
-  </material><link name="right_arm_base_link">
+<robot name="sawyer"><material name="TossingBot/Black"><color rgba="0 0 0 1" /></material><material name="TossingBot/Gray"><color rgba="0.5 0.5 0.5 1" /></material><material name="TossingBot/Grey"><color rgba="0.5 0.5 0.5 1" /></material><material name="TossingBot/DarkGrey"><color rgba="0.2 0.2 0.2 1" /></material><material name="TossingBot/DarkGray"><color rgba="0.2 0.2 0.2 1" /></material><material name="TossingBot/LightGrey"><color rgba="0.8 0.8 0.8 1" /></material><material name="TossingBot/LightGray"><color rgba="0.8 0.8 0.8 1" /></material><material name="TossingBot/White"><color rgba="1 1 1 1" /></material><material name="TossingBot/Red"><color rgba="1 0 0 1" /></material><material name="black"><color rgba="0.05 0.05 0.05 1" /></material><material name="sawyer_red"><color rgba="0.5 0.1 0.1 1" /></material><material name="darkred"><color rgba="0.5 0.1 0.1 1" /></material><material name="darkgray"><color rgba="0.35 0.35 0.35 1" /></material><material name="sawyer_gray"><color rgba="0.75 0.75 0.75 1" /></material><link name="right_arm_base_link">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.0006241 -2.8025E-05 0.065404" />
       <mass value="2.0687" />
@@ -39,13 +31,7 @@
       </geometry>
       <material name="sawyer_red" />
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0.08 0 0.23" />
-      <geometry>
-        <sphere radius="0.07" />
-      </geometry>
-    </collision>
-  </link><link name="head">
+    </link><link name="head">
     <inertial>
       <origin rpy="0 0 0" xyz="0.0053207 -2.6549E-05 0.1021" />
       <mass value="1.5795" />
@@ -58,13 +44,7 @@
       </geometry>
       <material name="sawyer_red" />
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.08" />
-      <geometry>
-        <sphere radius="0.18" />
-      </geometry>
-    </collision>
-  </link><link name="right_torso_itb">
+    </link><link name="right_torso_itb">
     <inertial>
       <origin rpy="0 0 0" xyz="0.000000 0.000000 0.000000" />
       <mass value="0.0001" />
@@ -83,13 +63,7 @@
       </geometry>
       <material name="sawyer_red" />
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.1225" />
-      <geometry>
-        <sphere radius="0.07" />
-      </geometry>
-    </collision>
-  </link><link name="right_l2">
+    </link><link name="right_l2">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00016044 -0.014967 0.13582" />
       <mass value="1.745" />
@@ -121,13 +95,7 @@
       </geometry>
       <material name="sawyer_red" />
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 -0.01 -0.12" />
-      <geometry>
-        <sphere radius="0.06" />
-      </geometry>
-    </collision>
-  </link><link name="right_l4">
+    </link><link name="right_l4">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.0018844 0.0069001 0.1341" />
       <mass value="1.1136" />
@@ -165,13 +133,7 @@
       </geometry>
       <material name="sawyer_red" />
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.1" />
-      <geometry>
-        <sphere radius="0.06" />
-      </geometry>
-    </collision>
-  </link><link name="right_hand_camera" /><link name="right_wrist" /><link name="right_l6">
+    </link><link name="right_hand_camera" /><link name="right_wrist" /><link name="right_l6">
     <inertial>
       <origin rpy="0 0 0" xyz="-8.0726E-06 0.0085838 -0.0049566" />
       <mass value="0.3292" />
@@ -220,25 +182,13 @@
       <mass value="1.0E-08" />
       <inertia ixx="1.0E-08" ixy="1.0E-08" ixz="1.0E-08" iyy="1.0E-08" iyz="1.0E-08" izz="1.0E-08" />
     </inertial>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.26" />
-      <geometry>
-        <sphere radius="0.06" />
-      </geometry>
-    </collision>
-  </link><link name="right_l4_2">
+    </link><link name="right_l4_2">
     <inertial>
       <origin rpy="0 0 0" xyz="1.0E-08 1.0E-08 1.0E-08" />
       <mass value="1.0E-08" />
       <inertia ixx="1.0E-08" ixy="1.0E-08" ixz="1.0E-08" iyy="1.0E-08" iyz="1.0E-08" izz="1.0E-08" />
     </inertial>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0.01 0.26" />
-      <geometry>
-        <sphere radius="0.06" />
-      </geometry>
-    </collision>
-  </link><link name="screen">
+    </link><link name="screen">
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
@@ -246,12 +196,6 @@
       </geometry>
       <material name="darkgray" />
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
-      <geometry>
-        <sphere radius="0.001" />
-      </geometry>
-    </collision>
     <inertial>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <mass value="0.0001" />
