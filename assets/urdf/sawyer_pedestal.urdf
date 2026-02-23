@@ -28,7 +28,7 @@
     <visual>
       <origin rpy="1.57079632679 0 -1.57079632679" xyz="0.26 0.345 -0.91488" />
       <geometry>
-        <mesh filename="../meshes/sawyer_description/meshes/sawyer_pv/pedestal.DAE" />
+        <mesh filename="/home/fausto/Projects/sawyer/tossingbot/assets/meshes/sawyer_description/meshes/sawyer_pv/pedestal.DAE" />
       </geometry>
       <material name="darkgray" />
     </visual>

@@ -1,4 +1,3 @@
-
 import os
 import time
 import numpy as np
@@ -8,104 +7,84 @@ from tossingbot import config as cfg
 from tossingbot.planning.kinematics import CasadiKinematics
 from tossingbot.planning.casadi_planner import CasadiPlanner
 from tossingbot.tossing.motion_planner import TossingPlanner
+from tossingbot.tossing.kinematics import RobotKinematics
 
 def run_pick_and_toss():
-    print("--- PICK AND TOSS INTEGRATION TEST ---")
+    print("--- OPTIMIZED PICK AND TOSS TEST ---")
     
-    # 1. Initialize Robot Client (ZMQ)
-    print("Connecting to robot...")
+    # 1. Initialize
     robot = SawyerRobot(host='localhost', port=5555)
-    
-    # Ensure robot is enabled
-    status = robot.get_robot_status()
-    if not status.get('enabled', False):
-        print("Enabling robot...")
+    if not robot.get_robot_status().get('enabled', False):
         robot.enable()
         time.sleep(1.0)
 
-    # 2. Setup Planning
-    # Use Tabletop Pneumatic URDF
-    urdf_path = cfg.SAWYER_PNEUMATIC_URDF
-    print(f"Loading URDF: {urdf_path}")
-    model = CasadiKinematics(urdf_path, cfg.BASE_LINK, cfg.END_LINK)
+    rk_analytical = RobotKinematics()
+    model = CasadiKinematics(cfg.SAWYER_PNEUMATIC_URDF, cfg.BASE_LINK, cfg.END_LINK)
     planner = CasadiPlanner(model)
     
-    # 3. Define Pick Position (Assumes object is there)
-    # Target: center of workspace, table height + cube half
-    pick_pos = np.array([0.6, 0.13, -0.22]) # Table is at -0.25 approx in robot frame
-    pick_quat = np.array([0, 1, 0, 0]) # Pointing down
-    
-    hover_pos = pick_pos + np.array([0, 0, 0.10])
+    # 2. Winning Config from V2 Search
+    # Wind-up: [0.70, 0.20] (Task Space)
+    # Release: [0.95, 0.50] (Task Space)
+    # Speed:   2.92 m/s
+    windup_task = [0.70, 0.20, 0.0]
+    release_task = [0.95, 0.0, 0.50]
+    toss_speed = 2.92
 
     try:
         # ======================================================================
         # PHASE 1: THE PICK
         # ======================================================================
-        print("[PHASE 1] Starting Pick Sequence...")
-        
-        # Open Gripper
-        print("Opening gripper...")
+        print("\n[PHASE 1] Starting Pick Sequence...")
         robot.gripper.open()
-        time.sleep(0.5)
         
-        # Move to Hover
-        print(f"Moving to Hover: {hover_pos}")
-        q_curr = robot.arm.get_joints().to_list()
-        q_hover = planner.plan_joint(q_curr, planner.compute_inverse_kinematics(q_curr, hover_pos, pick_quat))
-        if q_hover:
-            # We take the last waypoint for simplicity in this demo move
-            target_q = q_hover[-1]['position']
-            robot.arm.move(JointAngles(*target_q))
+        # Pick point (example)
+        pick_pos = np.array([0.6, 0.13, -0.22])
+        pick_quat = np.array([0, 1, 0, 0])
         
-        # Descent
-        print("Descending to object...")
+        # Move to Pick
         q_curr = robot.arm.get_joints().to_list()
-        q_pick = planner.plan_cartesian(q_curr, pick_pos, pick_quat, duration=1.0)
-        if q_pick:
-            target_q = q_pick[-1]['position']
-            robot.arm.move(JointAngles(*target_q))
+        q_pick = planner.compute_inverse_kinematics(q_curr, pick_pos, pick_quat)
+        if q_pick is not None:
+            robot.arm.move(JointAngles(*q_pick))
             
-        # Grasp
-        print("Closing gripper...")
         robot.gripper.close()
         time.sleep(1.0)
-        
-        # Lift
-        print("Lifting...")
-        q_curr = robot.arm.get_joints().to_list()
-        q_lift = planner.plan_cartesian(q_curr, hover_pos, pick_quat, duration=1.0)
-        if q_lift:
-            target_q = q_lift[-1]['position']
-            robot.arm.move(JointAngles(*target_q))
 
         # ======================================================================
-        # PHASE 2: THE TOSS
+        # PHASE 2: OPTIMIZED WIND-UP
         # ======================================================================
-        print("[PHASE 2] Starting Toss Sequence...")
+        print(f"\n[PHASE 2] Moving to Optimized Wind-up: {windup_task[:2]}")
         
-        # Move to Toss Ready
-        print("Moving to Toss Ready position...")
-        robot.arm.move(JointAngles(*cfg.TOSS_READY_POS))
-        time.sleep(0.5)
+        # Calculate 3-DOF subspace joints for the wind-up
+        q_windup_3dof = rk_analytical.inverse_kinematics_analytical(windup_task)
         
-        # Plan Tossing Trajectory (Optimized 3.5 m/s toss)
-        q_curr = np.array(robot.arm.get_joints().to_list())
-        q0_3dof = np.array([q_curr[1], q_curr[3], q_curr[5]]) # J1, J3, J5
-        # Use optimal release target found in grid search: [0.95, 0.0, 0.65]
-        toss_planner = TossingPlanner(profile="express", angle_deg=45, q0=q0_3dof, xT=np.array([0.95, 0.0, 0.65]))
+        # Map to 7-DOF (assuming J0=0, J2=0, J4=0, J6=1.766)
+        q_windup_7dof = [0.0, q_windup_3dof[0], 0.0, q_windup_3dof[1], 0.0, q_windup_3dof[2], 1.766]
         
-        speed = 3.5
-        sol_3d = toss_planner.get_trajectory(speed)
+        robot.arm.move(JointAngles(*q_windup_7dof))
+        time.sleep(1.0)
+
+        # ======================================================================
+        # PHASE 3: THE TOSS
+        # ======================================================================
+        print(f"\n[PHASE 3] Executing Optimized Toss at {toss_speed} m/s")
+        
+        # Get Fresh State
+        q_curr_full = np.array(robot.arm.get_joints().to_list())
+        q0_3dof = np.array([q_curr_full[1], q_curr_full[3], q_curr_full[5]])
+        
+        # Plan with optimized target
+        toss_planner = TossingPlanner(profile="express", angle_deg=45, q0=q0_3dof, xT=release_task)
+        sol_3d = toss_planner.get_trajectory(toss_speed)
         sol_7d = toss_planner.map_to_7dof(
             sol_3d["Q"], sol_3d["Qd"], sol_3d["Qdd"],
-            q_curr[0], q_curr[2], q_curr[4], q_curr[6]
+            q_curr_full[0], q_curr_full[2], q_curr_full[4], q_curr_full[6]
         )
         
         peak_idx = sol_3d["index"]
-        print(f"Executing toss at {speed} m/s (Release at index {peak_idx})")
+        print(f"  Toss planned. Release at index {peak_idx}")
         
-        # Execute Stream Trajectory with Async Release
-        # Using the correct ZMQ client method 'execute_stream_trajectory'
+        # Execute
         success = robot._client.execute_stream_trajectory(
             Q=sol_7d['Q'],
             Qd=sol_7d['Qd'],
@@ -114,16 +93,12 @@ def run_pick_and_toss():
         )
         
         if success:
-            print("\n[SUCCESS] Pick and Toss cycle complete.")
+            print("\n[SUCCESS] Optimized Pick and Toss complete.")
         else:
-            print("\n[ERROR] Trajectory execution failed.")
-        
-        # Return to Neutral
-        print("Returning to Neutral...")
-        robot.arm.move(JointAngles(*cfg.NEUTRAL_JOINT_POS))
+            print("\n[ERROR] Trajectory failed.")
 
     except Exception as e:
-        print(f"Error during execution: {e}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
     finally:
