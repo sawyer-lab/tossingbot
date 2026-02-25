@@ -1,13 +1,11 @@
 import os
 import numpy as np
-from tossingbot.planning.kinematics import CasadiKinematics
-from tossingbot.planning.planner import UnifiedPlanner
+from sawyer_motion_planner import CasadiKinematics, UnifiedPlanner
 from tossingbot import config as cfg
 
 def main():
     # 1. Setup URDF path
-    project_root = "/home/fausto/Projects/sawyer/tossingbot"
-    urdf_path = os.path.join(project_root, "assets/urdf/sawyer_tabletop_pneumatic.urdf")
+    urdf_path = cfg.SAWYER_PNEUMATIC_URDF
     
     BASE_LINK = "right_arm_base_link"
     TIP_LINK = "right_gripper_tip"

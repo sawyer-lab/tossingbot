@@ -3,7 +3,7 @@ import rospy
 import numpy as np
 import rospkg
 import traceback
-from geometry_msgs.msg import Point, Quaternion, Pose
+from sawyer_robot.geometry import Point, Quaternion, Pose
 from gazebo_msgs.srv import SetModelState, GetModelState
 from gazebo_msgs.msg import ModelState
 
@@ -13,13 +13,10 @@ from tossingbot.perception.ros_camera import RosCamera
 from tossingbot.perception.vision import VisionProcessor
 from tossingbot.hardware.sawyer import SawyerInterface, RobotCommand, ControlMode
 from tossingbot.hardware.gripper import GripperInterface
-from tossingbot.planning.kinematics import CasadiKinematics
-from tossingbot.planning.casadi_planner import CasadiPlanner
-from tossingbot.planning.orientation_helper import RotationPrimitive
+from sawyer_motion_planner import CasadiKinematics, CasadiPlanner, RotationPrimitive, TossingPlanner
 from tossingbot.environment.health_monitor import HealthMonitor
 from tossingbot.environment.gazebo_object_manager import GazeboObjectManager
 from tossingbot.environment.landing_sensor import LandingSensor
-from tossingbot.tossing.motion_planner import TossingPlanner
 
 class SimInterface:
     def __init__(self, allowed_objects=None):
@@ -217,9 +214,7 @@ class TossingEnv:
         self.toss = toss
         
         # Planning
-        rp = rospkg.RosPack()
-        urdf_path = rp.get_path('grasping') + "/sawyer_model.urdf"
-        self.kinematics = CasadiKinematics(urdf_path, "base", "right_gripper_tip")
+        self.kinematics = CasadiKinematics(cfg.SAWYER_PNEUMATIC_URDF, "base", "right_gripper_tip")
         self.planner = CasadiPlanner(self.kinematics) # Config injected automatically
         self.rot_helper = RotationPrimitive(num_rotations=cfg.NUM_ROTATIONS, total_deg=cfg.TOTAL_DEG)
         self.tossing_planner = TossingPlanner()

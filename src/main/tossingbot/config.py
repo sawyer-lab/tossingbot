@@ -1,6 +1,8 @@
 import os
 import numpy as np
 
+import sawyer_assets
+
 # Gets directory: .../tossingbot
 _CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -10,11 +12,9 @@ PROJECT_ROOT = os.path.abspath(os.path.join(_CONFIG_DIR, ".."))
 # Session Management
 SESSION_BASE_DIR = os.path.join(PROJECT_ROOT, "sessions")
 
-# Asset Paths
-ASSETS_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "assets"))
-URDF_DIR = os.path.join(ASSETS_DIR, "urdf")
-SAWYER_PNEUMATIC_URDF = os.path.join(URDF_DIR, "sawyer_tabletop_pneumatic.urdf")
-SAWYER_ELECTRIC_URDF = os.path.join(URDF_DIR, "sawyer_tabletop_electric.urdf")
+# Asset Paths (Using sawyer-assets package)
+SAWYER_PNEUMATIC_URDF = sawyer_assets.get_urdf_path("sawyer_tabletop_pneumatic.urdf")
+SAWYER_ELECTRIC_URDF = sawyer_assets.get_urdf_path("sawyer_tabletop_electric.urdf")
 
 # Robot Parameters
 BASE_LINK = "right_arm_base_link"

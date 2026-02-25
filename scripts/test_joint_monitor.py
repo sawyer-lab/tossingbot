@@ -1,14 +1,60 @@
+
+
+#!/usr/bin/env python3
 import os
+import sys
 import time
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+
+# Add parent dir to path if needed
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from sawyer_robot import SawyerRobot
 from sawyer_robot.geometry import JointAngles
-from tossingbot.planning.kinematics import CasadiKinematics
-from tossingbot.planning.planner import UnifiedPlanner
+from sawyer_motion_planner import CasadiKinematics, UnifiedPlanner
 from tossingbot.utils.joint_monitor import JointMonitor
 from tossingbot import config as cfg
+
+def create_status_image(text):
+    """Create a simple status image for the head display."""
+    img = np.zeros((600, 1024, 3), np.uint8)
+    img[:] = (40, 40, 40) # Dark gray background
+    cv2.putText(img, text, (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5)
+    return img
+
+def set_robot_color(robot, color):
+    """Convenience function to set the head and right hand LEDs."""
+    if not hasattr(robot, 'lights'):
+        return
+
+    # Define RGB boolean states
+    r, g, b = False, False, False
+    if color == 'red':
+        r = True
+    elif color == 'green':
+        g = True
+    elif color == 'blue':
+        b = True
+    elif color == 'yellow':
+        r, g = True, True
+    elif color == 'white':
+        r, g, b = True, True, True
+    elif color == 'off':
+        pass # All false
+        
+    try:
+        robot.lights.set('head_red_light', r)
+        robot.lights.set('head_green_light', g)
+        robot.lights.set('head_blue_light', b)
+        
+        robot.lights.set('right_hand_red_light', r)
+        robot.lights.set('right_hand_green_light', g)
+        robot.lights.set('right_hand_blue_light', b)
+    except Exception as e:
+        print(f"Warning: Could not set lights - {e}")
 
 def map_3to7(q3_traj, current_q7, active_indices):
     """Maps a 3-joint trajectory back to 7-joint space."""
@@ -19,8 +65,7 @@ def map_3to7(q3_traj, current_q7, active_indices):
     return q7_traj
 
 def main():
-    project_root = "/home/fausto/Projects/sawyer/tossingbot"
-    urdf_path = os.path.join(project_root, "assets/urdf/sawyer_tabletop_pneumatic.urdf")
+    urdf_path = cfg.SAWYER_PNEUMATIC_URDF
     BASE_LINK = "right_arm_base_link"
     TIP_LINK = "right_gripper_tip"
     MID_LINK = "right_hand"
@@ -36,22 +81,24 @@ def main():
         robot.enable()
         time.sleep(1.0)
         
-        
         monitor = JointMonitor(robot, hz=100.0)
         
-        # Initialize kinematics for both the end-effector and the mid-link
+        # Initialize kinematics
         kin7 = CasadiKinematics(urdf_path, BASE_LINK, TIP_LINK)
         kin7_mid = CasadiKinematics(urdf_path, BASE_LINK, MID_LINK)
         planner7 = UnifiedPlanner(kin7)
         
-        # 1. PLAN P2P TO READY
+        # 1. PRE-COMPUTE TRAJECTORIES
+        set_robot_color(robot, 'blue')
+        robot.head.display_image(create_status_image("CALCULATING PATHS..."))
         print("\n--- Planning Phase 1: P2P to Ready ---")
         curr_q = np.array(robot.arm.get_joints().to_list())
         ready_q = np.array(cfg.TOSS_READY_POS)
         p2p_sol = planner7.solve_p2p_joint(curr_q, ready_q, duration=10.0)
-        if not p2p_sol: print("P2P solver failed!"); return
+        if not p2p_sol: 
+            print("P2P solver failed!")
+            return
 
-        # 2. PLAN TOSS + STOP
         print("--- Planning Phase 2: 3-DOF Toss + Stop ---")
         active_indices = [1, 3, 5]
         joint_names = ["right_j0", "right_j1", "right_j2", "right_j3", "right_j4", "right_j5", "right_j6"]
@@ -68,7 +115,9 @@ def main():
         release_angle = np.deg2rad(45)
         
         toss_sol = planner3.solve_toss(q3_start, target_pos, target_speed, release_angle, duration=0.7)
-        if not toss_sol: print("Toss solver failed!"); return
+        if not toss_sol: 
+            print("Toss solver failed!")
+            return
             
         stop_sol = planner3.append_stop_trajectory(toss_sol['Q'][-1], toss_sol['Qd'][-1], stop_duration=0.8)
         
@@ -77,7 +126,65 @@ def main():
         
         toss_stop_q7 = map_3to7(Q3_full, ready_q, active_indices)
 
-        # 3. EXECUTE & MONITOR
+        # 2. WAITING FOR USER INPUT
+        print("\n--- Ready! Waiting for physical button input ---")
+        robot.head.display_image(create_status_image("READY. PRESS SQUARE TO TOSS."))
+        
+        waiting_for_trigger = True
+        try:
+            while waiting_for_trigger:
+                nav = robot.navigator.get_state(side="all")
+                cuff = robot.cuff.get_state(side="right")
+                
+                active_nav = {k: v for k, v in nav.items() if v != 'OFF' and 'wheel' not in k}
+                active_cuff = [k for k, v in cuff.items() if v]
+                
+                # Gripper Controls
+                if "lower" in active_cuff:
+                    print("Event: CUFF lower -> Closing Gripper")
+                    if hasattr(robot, 'gripper'): 
+                        robot.gripper.close() 
+                    robot.head.display_image(create_status_image("GRIPPER CLOSED"))
+                    set_robot_color(robot, 'white') # Flash white on grab
+                    time.sleep(0.5)
+                    set_robot_color(robot, 'blue')
+                    robot.head.display_image(create_status_image("READY. PRESS SQUARE TO TOSS."))
+                    
+                elif "upper" in active_cuff:
+                    print("Event: CUFF upper -> Opening Gripper")
+                    if hasattr(robot, 'gripper'): 
+                        robot.gripper.open()
+                    robot.head.display_image(create_status_image("GRIPPER OPENED"))
+                    set_robot_color(robot, 'white') # Flash white on release
+                    time.sleep(0.5) 
+                    set_robot_color(robot, 'blue')
+                    robot.head.display_image(create_status_image("READY. PRESS SQUARE TO TOSS."))
+                
+                # Start Toss Controls (Square)
+                elif "right_button_square" in active_nav or "head_button_square" in active_nav:
+                    print("Event: SQUARE button -> Starting Countdown")
+                    waiting_for_trigger = False
+                    
+                time.sleep(0.1)
+                
+        except KeyboardInterrupt:
+            print("\nExiting before toss.")
+            set_robot_color(robot, 'off')
+            robot.head.display_clear()
+            return
+
+        # 3. COUNTDOWN (Flashing Red)
+        for i in range(3, 0, -1):
+            set_robot_color(robot, 'red')
+            robot.head.display_image(create_status_image(f"TOSSING IN {i}..."))
+            time.sleep(0.5)
+            set_robot_color(robot, 'off')
+            time.sleep(0.5)
+            
+        robot.head.display_image(create_status_image("EXECUTING TOSS!"))
+        set_robot_color(robot, 'green') # Green for GO!
+
+        # 4. EXECUTE & MONITOR
         print("\n--- Execution Start ---")
         monitor.start_recording()
         monitor_start_time = time.time()
@@ -90,12 +197,15 @@ def main():
         
         # Toss Execution
         toss_cmd_send_time = time.time() 
-        release_idx = toss_sol['Q'].shape[0] + 5
+        release_idx = toss_sol['Q'].shape[0] + 2
         robot.arm.stream_trajectory(toss_stop_q7, map_3to7(Qd3_full, np.zeros(7), active_indices), np.zeros((len(Q3_full), 7)), release_index=release_idx)
         
         time.sleep(1.0) 
         monitor.stop_recording()
         print("--- Execution Complete ---")
+        
+        set_robot_color(robot, 'yellow') # Yellow for processing/saving logs
+        robot.head.display_image(create_status_image("DONE! SAVING LOGS..."))
         
         # Calculate time vectors
         p2p_dt = planner7.dt
@@ -106,11 +216,12 @@ def main():
         t_toss_cmd = (toss_cmd_send_time - monitor_start_time) + np.arange(toss_stop_q7.shape[0]) * toss_dt
         cmd_release_time_absolute = t_toss_cmd[release_idx]
 
-        # 4. DATA ANALYSIS & PLOTTING
+        # 5. DATA ANALYSIS & PLOTTING
         data = monitor.get_data()
         
         if len(data['time']) == 0:
             print("Error: No data was collected by the monitor. Plots will be empty.")
+            set_robot_color(robot, 'red')
             return
 
         print(f"Collected {len(data['time'])} samples.")
@@ -193,31 +304,23 @@ def main():
         Qd7_full = map_3to7(Qd3_full, np.zeros(7), active_indices)
             
         toss_stop_endp_vel = np.zeros((toss_stop_q7.shape[0], 3))
-        toss_stop_mid_vel = np.zeros((toss_stop_q7.shape[0], 3)) # NEW: Mid-link cmd velocities
+        toss_stop_mid_vel = np.zeros((toss_stop_q7.shape[0], 3))
         
         for i in range(toss_stop_q7.shape[0]):
-            # Tip velocity
             J_tip = kin7.jacobian(toss_stop_q7[i])
             toss_stop_endp_vel[i] = (J_tip @ Qd7_full[i]).full().flatten()
-            
-            # Mid-link velocity
             J_mid = kin7_mid.jacobian(toss_stop_q7[i])
             toss_stop_mid_vel[i] = (J_mid @ Qd7_full[i]).full().flatten()
             
-        # Compute "computed actual" endpoint and mid-link velocities
         computed_endp_vel = np.zeros_like(data['endpoint_vel'])
-        computed_mid_vel = np.zeros((data['q'].shape[0], 3)) # NEW: Mid-link actual velocities
+        computed_mid_vel = np.zeros((data['q'].shape[0], 3))
         
         if data['q'].shape[0] > 0 and data['qd'].shape[0] > 0:
             for i in range(data['q'].shape[0]):
                 q_actual = data['q'][i]
                 qd_actual = data['qd'][i]
-                
-                # Actual tip
                 J_tip = kin7.jacobian(q_actual)
                 computed_endp_vel[i] = (J_tip @ qd_actual).full().flatten()
-                
-                # Actual mid-link
                 J_mid = kin7_mid.jacobian(q_actual)
                 computed_mid_vel[i] = (J_mid @ qd_actual).full().flatten()
             
@@ -232,7 +335,7 @@ def main():
         fig_endp, axes_endp = plt.subplots(len(vel_plots), 1, figsize=(12, 12), sharex=True)
         for p_idx, (title, i, color, label) in enumerate(vel_plots):
             ax = axes_endp[p_idx]
-            if i == -1: # Mag XZ
+            if i == -1: 
                 if 'endpoint_vel' in data and data['endpoint_vel'].size > 0:
                     actual_mag = np.sqrt(data['endpoint_vel'][:, 0]**2 + data['endpoint_vel'][:, 2]**2)
                     ax.plot(data['time'], actual_mag, f'{color}-', alpha=0.7, label=f'Reported Actual {label} Vel')
@@ -274,19 +377,14 @@ def main():
         
         for i in range(4):
             ax = axes_mid[i]
-            
             if i < 3:
-                # Plot X, Y, Z components
                 if computed_mid_vel.shape[0] > 0:
                     ax.plot(data['time'], computed_mid_vel[:, i], 'y-', linewidth=1.5, alpha=0.9, label=f'Actual {labels[i]} Vel')
-                    
                 ax.plot(t_toss_cmd, toss_stop_mid_vel[:, i], f'{colors[i]}--', linewidth=1.5, label=f'Cmd Toss+Stop {labels[i]}')
             else:
-                # Plot Total Speed (Magnitude)
                 if computed_mid_vel.shape[0] > 0:
                     actual_speed = np.sqrt(computed_mid_vel[:, 0]**2 + computed_mid_vel[:, 1]**2 + computed_mid_vel[:, 2]**2)
                     ax.plot(data['time'], actual_speed, 'y-', linewidth=1.5, alpha=0.9, label='Actual Speed')
-                    
                 cmd_speed = np.sqrt(toss_stop_mid_vel[:, 0]**2 + toss_stop_mid_vel[:, 1]**2 + toss_stop_mid_vel[:, 2]**2)
                 ax.plot(t_toss_cmd, cmd_speed, f'{colors[i]}--', linewidth=1.5, label='Cmd Toss+Stop Speed')
             
@@ -302,6 +400,12 @@ def main():
         plt.close(fig_mid)
         
         print(f"All plots saved to {run_log_dir}/")
+        
+        # Cleanup
+        set_robot_color(robot, 'off')
+        robot.head.display_image(create_status_image("LOGS SAVED. EXITING."))
+        time.sleep(2.0)
+        robot.head.display_clear()
 
 if __name__ == "__main__":
     main()

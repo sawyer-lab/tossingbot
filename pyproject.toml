@@ -8,6 +8,8 @@ version = "1.0.0"
 requires-python = ">=3.8"
 dependencies = [
     "robot-client",
+    "sawyer-assets",
+    "sawyer-motion-planner",
 ]
 
 [tool.setuptools]
