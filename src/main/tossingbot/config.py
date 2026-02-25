@@ -34,11 +34,11 @@ ROI_Z = [-0.249, -0.199]
 # Safety Heights
 GRASP_Z = -0.25
 SAFE_LIFT_HEIGHT = 0.15
-NEUTRAL_JOINT_POS = [0.0, -1.27, 0.0, 2.06, 0.0, 0.0, 1.57]
+NEUTRAL_JOINT_POS = [0.0, 0.175, 0.0, 2.06, 0.0, 0.0, 1.57]
 
 # Tossing Configuration
 # Optimal Wind-up found via Grid Search for 3.5m/s @ [0.95, 0.0, 0.65]
-TOSS_READY_POS = [0.0, -0.2, 0.0, 0.8, 0.0, 0.4, 1.766]
+TOSS_READY_POS = [0.0, -1.01986851, 0.0, 2.0424116, 0.0, 0.57185201, 1.766]
 
 # Point Cloud Parameters
 VOXEL_SIZE = 0.005
