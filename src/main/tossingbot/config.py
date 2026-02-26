@@ -2,6 +2,7 @@ import os
 import numpy as np
 
 import sawyer_assets
+from sawyer_common.sawyer import Link
 
 # Gets directory: .../tossingbot
 _CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,8 +18,8 @@ SAWYER_PNEUMATIC_URDF = sawyer_assets.get_urdf_path("sawyer_tabletop_pneumatic.u
 SAWYER_ELECTRIC_URDF = sawyer_assets.get_urdf_path("sawyer_tabletop_electric.urdf")
 
 # Robot Parameters
-BASE_LINK = "right_arm_base_link"
-END_LINK = "right_gripper_tip"
+BASE_LINK = Link.BASE
+END_LINK = Link.GRIPPER
 
 # Workstation Parameters
 TABLE_HEIGHT = 0.75

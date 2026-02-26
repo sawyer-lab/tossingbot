@@ -3,7 +3,7 @@ import os
 import time
 import numpy as np
 from sawyer_robot import SawyerRobot
-from sawyer_robot.geometry import JointAngles
+from sawyer_common.geometry import JointAngles
 from tossingbot import config as cfg
 from tossingbot.planning.kinematics import CasadiKinematics
 from tossingbot.planning.casadi_planner import CasadiPlanner

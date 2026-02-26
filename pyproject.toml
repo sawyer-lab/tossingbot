@@ -10,6 +10,7 @@ dependencies = [
     "robot-client",
     "sawyer-assets",
     "sawyer-motion-planner",
+    "sawyer-common",
 ]
 
 [tool.setuptools]

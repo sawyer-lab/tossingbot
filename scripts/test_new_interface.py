@@ -2,7 +2,7 @@
 import os
 import time
 from sawyer_robot import SawyerRobot
-from sawyer_robot.geometry import JointAngles
+from sawyer_common.geometry import JointAngles
 from tossingbot import config as cfg
 
 def main():

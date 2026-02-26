@@ -19,7 +19,7 @@ import torch.nn as nn
 import torchvision.transforms.functional as TF
 
 # --- ROS REPLACEMENT MESSAGES ---
-from sawyer_robot.geometry import Point, Quaternion, Pose
+from sawyer_common.geometry import Position, Quaternion, Pose
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState, GetModelState
 
@@ -29,7 +29,7 @@ from tossingbot.perception.ros_camera import RosCamera
 from tossingbot.perception.vision import VisionProcessor
 from tossingbot.hardware.sawyer import SawyerInterface, RobotCommand, ControlMode
 from tossingbot.hardware.gripper import GripperInterface
-from sawyer_motion_planner import CasadiKinematics, CasadiPlanner, RotationPrimitive
+from sawyer_motion_planner import CasadiKinematics, SawyerPlanner
 from network import TossingBot_Modular
 from buffer import PrioritizedReplayBuffer
 from utils import RotationTransformer
@@ -81,7 +81,7 @@ class SimInterface:
             rand_y = np.random.uniform(min_y, max_y)
             
             self.anchor_poses[obj_name] = {
-                'pos': Point(rand_x, rand_y, 0.78),
+                'pos': Position(rand_x, rand_y, 0.78),
                 'ori': Quaternion(x=q_list[0], y=q_list[1], z=q_list[2], w=q_list[3])
             }
         self._apply_anchor()
@@ -127,7 +127,7 @@ class RotationalEnv:
         self.vision = VisionProcessor()
 
         self.kinematics = CasadiKinematics(config.SAWYER_PNEUMATIC_URDF, "base", "right_gripper_tip")
-        self.planner = CasadiPlanner(self.kinematics)
+        self.planner = SawyerPlanner(self.kinematics)
 
         self.robot = SawyerInterface()
         self.gripper = GripperInterface()

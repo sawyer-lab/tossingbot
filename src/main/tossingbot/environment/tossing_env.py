@@ -3,7 +3,7 @@ import rospy
 import numpy as np
 import rospkg
 import traceback
-from sawyer_robot.geometry import Point, Quaternion, Pose
+from sawyer_common.geometry import Position, Quaternion, Pose
 from gazebo_msgs.srv import SetModelState, GetModelState
 from gazebo_msgs.msg import ModelState
 
@@ -13,7 +13,7 @@ from tossingbot.perception.ros_camera import RosCamera
 from tossingbot.perception.vision import VisionProcessor
 from tossingbot.hardware.sawyer import SawyerInterface, RobotCommand, ControlMode
 from tossingbot.hardware.gripper import GripperInterface
-from sawyer_motion_planner import CasadiKinematics, CasadiPlanner, RotationPrimitive, TossingPlanner
+from sawyer_motion_planner import CasadiKinematics, SawyerPlanner
 from tossingbot.environment.health_monitor import HealthMonitor
 from tossingbot.environment.gazebo_object_manager import GazeboObjectManager
 from tossingbot.environment.landing_sensor import LandingSensor
@@ -215,9 +215,8 @@ class TossingEnv:
         
         # Planning
         self.kinematics = CasadiKinematics(cfg.SAWYER_PNEUMATIC_URDF, "base", "right_gripper_tip")
-        self.planner = CasadiPlanner(self.kinematics) # Config injected automatically
-        self.rot_helper = RotationPrimitive(num_rotations=cfg.NUM_ROTATIONS, total_deg=cfg.TOTAL_DEG)
-        self.tossing_planner = TossingPlanner()
+        self.planner = SawyerPlanner(self.kinematics)
+        self.tossing_planner = self.planner # Alias for backward compatibility if needed
 
         # State Tracking
         self.max_steps = 50
